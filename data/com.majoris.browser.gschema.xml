@@ -1,8 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <schemalist><schema id="com.majoris.browser" path="/com/majoris/browser/">
 <key name="homepage" type="s"><default>'about:blank'</default><summary>Homepage URL</summary></key>
-<key name="startup" type="s"><default>'new-tab'</default><choices><choice value="new-tab"/><choice value="restore"/></choices><summary>Startup behaviour</summary></key>
+<key name="startup" type="s"><default>'new-tab'</default><choices><choice value="new-tab"/><choice value="restore"/><choice value="home"/><choice value="pages"/></choices><summary>Startup behaviour</summary></key>
 <key name="search-template" type="s"><default>'https://duckduckgo.com/?q=%s'</default><summary>Search URL template</summary></key>
 <key name="search-suggestions" type="b"><default>false</default><summary>Allow remote search suggestions</summary></key>
 <key name="show-bookmarks-bar" type="b"><default>false</default><summary>Show bookmarks bar</summary></key>
+<key name="startup-pages" type="as"><default>[]</default><summary>Startup pages</summary></key>
+<key name="suggest-template" type="s"><default>'https://duckduckgo.com/ac/?q=%s&amp;type=list'</default><summary>Opt-in search suggestion endpoint</summary></key>
+<key name="download-directory" type="s"><default>''</default><summary>Download directory</summary></key>
+<key name="ask-download" type="b"><default>true</default><summary>Ask for download destination</summary></key>
+<key name="default-zoom" type="d"><default>0.0</default><summary>Default page zoom</summary></key>
+<key name="block-third-party-cookies" type="b"><default>false</default><summary>Block third-party cookies</summary></key>
+<key name="https-first" type="b"><default>false</default><summary>Prefer HTTPS navigations</summary></key>
+<key name="setup-complete" type="b"><default>false</default><summary>First-run setup has been presented</summary></key>
+<key name="proxy-address" type="s"><default>''</default><summary>Proxy address; empty uses the system configuration</summary></key>
+<key name="hardware-acceleration" type="b"><default>true</default><summary>Use hardware acceleration after restarting</summary></key>
 </schema></schemalist>

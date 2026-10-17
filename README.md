@@ -6,7 +6,7 @@ GTK4/libadwaita browser and isolated web-application runtime, written primarily 
 
 ## Build on Debian 13
 
-Install `build-essential valac libgtk-4-dev libadwaita-1-dev libglib2.0-dev libgee-0.8-dev libjson-glib-dev libsqlite3-dev libsecret-1-dev meson ninja-build gettext cmake python3`. For UI tests, also install `xvfb xauth dbus-daemon`.
+Install `build-essential valac libgtk-4-dev libadwaita-1-dev libglib2.0-dev libgee-0.8-dev libjson-glib-dev libsqlite3-dev libsecret-1-dev libsoup-3.0-dev libxml2-dev libgdk-pixbuf-2.0-dev meson ninja-build gettext cmake python3`. GTK 4.14+ and libadwaita 1.5+ are required. For all integration tests, also install `xvfb xauth dbus-daemon python3-gi libnss3-tools gnome-keyring`.
 
 CEF is an explicit dependency. Meson never downloads it. The bootstrap downloads a pinned ~321 MB Linux x86-64 SDK, verifies the publisher's pinned checksum, stages runtime resources, and builds its wrapper:
 
@@ -37,14 +37,18 @@ Browser-owned SQLite data lives under `$XDG_DATA_HOME/majoris-browser/browser/`.
 
 Install a website with **Install as App…**. Same-origin manifest name, start URL and scope are used when available, otherwise ordinary sites receive an origin scope. Each generated desktop entry launches `majoris-browser --app=<id>` with its own GTK application identity and process. Closing Browser does not close app processes. GNOME favourites integration is behind `ShellIntegration`.
 
-Browser site-data clearing shuts down the normal engine before deleting only its profile. App-data clearing acquires that app's exclusive profile lock, refuses running apps, and never follows a symlinked profile root. Uninstall currently retains site data; the separate Clear Application Data control removes it.
+Site Information can clear matching host/domain cookies and origin storage through Chromium APIs. Shared domain cookies can also be used by sibling hosts; other origins' storage is preserved. Full Browser clearing shuts down its engine before deleting only its profile. App-data clearing and uninstall hold that app's exclusive profile lock, refuse running apps and reject symlinked profile roots or parents. Uninstall offers retaining or removing site data.
 
-Private windows use in-memory CEF contexts shared among their tabs, omitted from history/session persistence. Explicit password management uses Linux Secret Service and origin checks; passwords are never written to the Browser database or settings.
+Private windows use in-memory CEF contexts shared among their tabs, omitted from history/session/download persistence. Supported HTTPS login forms use an isolated renderer observer, consented save/update prompts and Secret Service storage. Autofill checks the current main-frame origin. Password reveal requires PolicyKit authentication. No password is stored in SQLite or GSettings. Generic SPA login-success inference and secure password import are not claimed.
 
 ## Verification
 
-Meson registers headless domain tests, a real CEF regression that verifies cookie isolation and persistence over process restarts, profile-clear/lock tests, and a GTK smoke suite that loads a local fixture, installs its manifest app through the GTK dialog, verifies its registry/desktop entry, opens settings/history/downloads/Task Manager, and separately launches the installed app. It asserts rendered frames, not just process startup. Engine tests use Ozone headless with software rendering while retaining the sandbox. GTK tests use Xvfb and disposable XDG homes.
+Meson registers domain tests and real CEF suites for cookies/storage isolation, downloads, persisted/live permissions, beforeunload consent, credentials and native notifications. The GTK smoke suite loads a local fixture, installs its manifest app through the GTK dialog, verifies its registry/desktop entry, opens settings/history/downloads/Task Manager, and runs Browser and its installed app concurrently. It asserts rendered frames and independent lifetime. Engine tests use Ozone headless with software rendering while retaining the sandbox. GTK tests use Xvfb and disposable XDG homes.
 
-The required Google Sheets/account/dock verification on a Majoris desktop has **not** been performed. Wayland interaction, native dialogs, credential interoperability and complex OAuth providers still require manual qualification. No live account credentials were used in development tests.
+The required Google Sheets/account/dock verification on a Majoris desktop has **not** been performed. Wayland interaction, PolicyKit reveal, native print/file dialogs and real OAuth providers still require manual qualification. Credential tests use a disposable unlocked keyring and a locally trusted HTTPS fixture. Other disposable fixtures use Chromium's basic cookie-encryption backend to avoid interactive desktop unlock prompts; this does not change production defaults or disable sandboxing. No live account credentials were used.
 
-See [architecture](docs/architecture.md), [recorded test results](docs/verification-results.md), [release verification](docs/release-verification.md), and [status](docs/implementation-status.md).
+Run `python3 scripts/verify-clean.py --cef-root "$CEF_ROOT"` for a new source-copy build without generated files. The pinned SDK remains an external dependency. See the [completion matrix](docs/implementation-status.md) for implemented paths, limitations and remaining release work.
+
+Run `python3 scripts/verify-package.py --cef-root "$CEF_ROOT"` on Debian to build/test packages in a temporary native Linux directory and copy artifacts back into the workspace. This also avoids Windows-mounted staging permission issues under WSL. System installation and target desktop checks remain separate release gates.
+
+See [architecture](docs/architecture.md), [recorded test results](docs/verification-results.md), [release verification](docs/release-verification.md), [engine security maintenance](docs/security-maintenance.md), and [status](docs/implementation-status.md).

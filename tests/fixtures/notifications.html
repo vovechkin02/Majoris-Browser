@@ -1,0 +1,5 @@
+<!doctype html><meta charset="utf-8"><title>Native notification probe</title>
+<button style="position:fixed;left:10px;top:10px;width:150px;height:50px" onclick="notify()">Notify</button><output id="status">pending</output>
+<script>
+async function notify(){const status=document.getElementById('status');status.textContent='requested';try{const permission=await Notification.requestPermission();if(permission!=='granted'){status.textContent='permission-'+permission;return;}const n=new Notification('Majoris fixture notification',{body:'Real Chromium notification body',tag:'fixture'});n.onshow=()=>status.textContent='shown';n.onerror=()=>status.textContent='error';n.onclick=()=>{status.textContent='clicked';n.close();};}catch(e){status.textContent='unsupported';}}
+</script>

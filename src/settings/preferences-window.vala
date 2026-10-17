@@ -4,12 +4,22 @@ namespace MajorisBrowser {
             title=_("Browser Settings");
             var general=new Adw.PreferencesPage();general.title=_("General");general.icon_name="preferences-system-symbolic";add(general);
             var group=new Adw.PreferencesGroup();group.title=_("Startup and Search");general.add(group);
+            var import_data=new Adw.ActionRow();import_data.title=_("Import Browser Data…");import_data.activatable=true;import_data.activated.connect(()=>new ImportDialog(app).present(this));group.add(import_data);
             var homepage=new Adw.EntryRow();homepage.title=_("Homepage");app.preferences.bind("homepage",homepage,"text",SettingsBindFlags.DEFAULT);group.add(homepage);
-            var restore=new Adw.SwitchRow();restore.title=_("Restore Previous Session");restore.active=app.preferences.get_string("startup")=="restore";restore.notify["active"].connect(()=>app.preferences.set_string("startup",restore.active?"restore":"new-tab"));group.add(restore);
+            var startup=new Adw.ComboRow();startup.title=_("On Startup");startup.model=new Gtk.StringList({_("New Tab"),_("Homepage"),_("Previous Session"),_("Specific Pages")});string[] modes={"new-tab","home","restore","pages"};for(int i=0;i<modes.length;i++)if(modes[i]==app.preferences.get_string("startup"))startup.selected=i;startup.notify["selected"].connect(()=>app.preferences.set_string("startup",modes[startup.selected]));group.add(startup);
+            var pages=new Adw.EntryRow();pages.title=_("Startup Pages (one URL per space)");pages.text=string.joinv(" ",app.preferences.get_strv("startup-pages"));pages.changed.connect(()=>app.preferences.set_strv("startup-pages",pages.text.split(" ")));group.add(pages);
             var search=new Adw.ComboRow();search.title=_("Search Engine");search.model=new Gtk.StringList({"DuckDuckGo","Google","Bing"});group.add(search);
             string[] templates={"https://duckduckgo.com/?q=%s","https://www.google.com/search?q=%s","https://www.bing.com/search?q=%s"};
             for(int i=0;i<templates.length;i++)if(templates[i]==app.preferences.get_string("search-template"))search.selected=i;
             search.notify["selected"].connect(()=>app.preferences.set_string("search-template",templates[search.selected]));
+            var custom=new Adw.EntryRow();custom.title=_("Search URL (%s is replaced by the query)");app.preferences.bind("search-template",custom,"text",SettingsBindFlags.DEFAULT);group.add(custom);
+            var suggestions=new Adw.SwitchRow();suggestions.title=_("Remote Search Suggestions");suggestions.subtitle=_("Send search text to the configured suggestion provider");app.preferences.bind("search-suggestions",suggestions,"active",SettingsBindFlags.DEFAULT);group.add(suggestions);
+            var endpoint=new Adw.EntryRow();endpoint.title=_("Suggestion URL (HTTPS OpenSearch JSON)");app.preferences.bind("suggest-template",endpoint,"text",SettingsBindFlags.DEFAULT);group.add(endpoint);
+            var bookmarks=new Adw.SwitchRow();bookmarks.title=_("Show Bookmarks Bar");app.preferences.bind("show-bookmarks-bar",bookmarks,"active",SettingsBindFlags.DEFAULT);group.add(bookmarks);
+            var downloads=new Adw.PreferencesGroup();downloads.title=_("Downloads");general.add(downloads);
+            var directory=new Adw.EntryRow();directory.title=_("Download Folder (blank uses Downloads)");app.preferences.bind("download-directory",directory,"text",SettingsBindFlags.DEFAULT);downloads.add(directory);
+            var ask=new Adw.SwitchRow();ask.title=_("Ask Where to Save Each Download");app.preferences.bind("ask-download",ask,"active",SettingsBindFlags.DEFAULT);downloads.add(ask);
+            var zoom=new Adw.ComboRow();zoom.title=_("Default Page Zoom");zoom.model=new Gtk.StringList({"75%","90%","100%","110%","125%","150%","200%"});double[] levels={Math.log(0.75)/Math.log(1.2),Math.log(0.9)/Math.log(1.2),0,Math.log(1.1)/Math.log(1.2),Math.log(1.25)/Math.log(1.2),Math.log(1.5)/Math.log(1.2),Math.log(2)/Math.log(1.2)};zoom.selected=2;for(int i=0;i<levels.length;i++)if(Math.fabs(levels[i]-app.preferences.get_double("default-zoom"))<0.01)zoom.selected=i;zoom.notify["selected"].connect(()=>app.preferences.set_double("default-zoom",levels[zoom.selected]));group.add(zoom);
             var default_browser=new Adw.ActionRow();default_browser.title=_("Set as Default Browser");var set_default=new Gtk.Button.with_label(_("Set Default"));set_default.valign=Gtk.Align.CENTER;default_browser.add_suffix(set_default);group.add(default_browser);
             set_default.clicked.connect(()=>{
                 try {var info=new DesktopAppInfo("com.majoris.browser.desktop");if(info!=null){info.set_as_default_for_type("x-scheme-handler/http");info.set_as_default_for_type("x-scheme-handler/https");}}
@@ -17,6 +27,11 @@ namespace MajorisBrowser {
             });
             var privacy=new Adw.PreferencesPage();privacy.title=_("Privacy");privacy.icon_name="security-high-symbolic";add(privacy);
             var data=new Adw.PreferencesGroup();data.title=_("Browser Data");privacy.add(data);
+            var cookies=new Adw.SwitchRow();cookies.title=_("Block Third-Party Cookies");app.preferences.bind("block-third-party-cookies",cookies,"active",SettingsBindFlags.DEFAULT);data.add(cookies);
+            var https=new Adw.SwitchRow();https.title=_("Prefer HTTPS");https.subtitle=_("Use Chromium’s HTTPS upgrades when available");app.preferences.bind("https-first",https,"active",SettingsBindFlags.DEFAULT);data.add(https);
+            var passwords=new Adw.ActionRow();passwords.title=_("Saved Passwords");passwords.subtitle=_("Search, delete or authenticate to view and update passwords");passwords.activatable=true;passwords.activated.connect(()=>new CredentialManager().present(this));data.add(passwords);
+            var policies=new Adw.ActionRow();policies.title=_("Site Permissions and Password Exceptions");policies.activatable=true;policies.activated.connect(()=>new PolicyDialog(app).present(this));data.add(policies);
+            var addresses=new Adw.ActionRow();addresses.title=_("Address Profiles");addresses.activatable=true;addresses.activated.connect(()=>new AddressDialog(app).present(this));data.add(addresses);
             var clear=new Adw.ActionRow();clear.title=_("Clear Browsing History");var clear_button=new Gtk.Button.with_label(_("Clear"));clear_button.valign=Gtk.Align.CENTER;clear.add_suffix(clear_button);data.add(clear);
             clear_button.clicked.connect(()=>{
                 var confirm=new Adw.AlertDialog(_("Clear Browser History?"),_("Installed web apps keep their independent profiles."));confirm.add_response("cancel",_("Cancel"));confirm.add_response("clear",_("Clear"));confirm.set_response_appearance("clear",Adw.ResponseAppearance.DESTRUCTIVE);confirm.response.connect((id)=>{if(id=="clear")app.storage.run((store)=>store.clear_history());});confirm.present(this);
@@ -27,14 +42,25 @@ namespace MajorisBrowser {
                 var confirm=new Adw.AlertDialog(_("Clear Browser Site Data?"),_("Browser will close and remove its cookies, cache and site storage. Installed web apps remain independent."));confirm.add_response("cancel",_("Cancel"));confirm.add_response("clear",_("Clear and Close Browser"));confirm.set_response_appearance("clear",Adw.ResponseAppearance.DESTRUCTIVE);confirm.response.connect((id)=>{if(id=="clear"){force_close();app.clear_browser_profile();}});confirm.present(this);
             });
             var webapps=new Adw.PreferencesPage();webapps.title=_("Web Apps");webapps.icon_name="application-x-executable-symbolic";add(webapps);
+            var advanced=new Adw.PreferencesPage();advanced.title=_("Advanced");advanced.icon_name="preferences-other-symbolic";add(advanced);var engine=new Adw.PreferencesGroup();advanced.add(engine);
+            var acceleration=new Adw.SwitchRow();acceleration.title=_("Hardware Acceleration");acceleration.subtitle=_("Restart Browser and installed apps to apply");app.preferences.bind("hardware-acceleration",acceleration,"active",SettingsBindFlags.DEFAULT);engine.add(acceleration);
+            var proxy=new Adw.EntryRow();proxy.title=_("Proxy Address (blank uses system)");proxy.text=app.preferences.get_string("proxy-address");proxy.show_apply_button=true;proxy.apply.connect(()=>{string text=proxy.text.strip();try{if(text!=""){var uri=Uri.parse(text,UriFlags.NONE);if((uri.get_scheme()!="http" && uri.get_scheme()!="https" && uri.get_scheme()!="socks5") || uri.get_host()==null || uri.get_userinfo()!=null)throw new IOError.INVALID_ARGUMENT(_("Use an HTTP, HTTPS or SOCKS5 proxy URL without embedded credentials."));}app.preferences.set_string("proxy-address",text);}catch(Error e){EngineDialogs.show_error(this,e.message);}});engine.add(proxy);
+            var version=new Adw.ActionRow();version.title=_("Engine Version");version.subtitle=MajorisCef.version();engine.add(version);
             var apps=new Adw.PreferencesGroup();apps.title=_("Installed Applications");webapps.add(apps);
             app.storage.run((store)=>{
                 var installed=store.apps();
                 Idle.add(()=>{
                     foreach(var metadata in installed){
                         var row=new Adw.ActionRow();row.use_markup=false;row.title=metadata.name;row.subtitle=metadata.start_url;apps.add(row);
+                        row.subtitle+=" · "+new DateTime.from_unix_local(metadata.installed_at).format("%x");
+                        if(metadata.icon_path!=""){var image=new Gtk.Image.from_file(metadata.icon_path);image.pixel_size=40;row.add_prefix(image);}
+                        try{WebAppManager.measure.begin(app.paths.webapp_context(metadata.id),(obj,res)=>{try{row.subtitle+=" · "+_("Profile files: %s").printf(GLib.format_size(WebAppManager.measure.end(res)));}catch(Error e){row.subtitle+=" · "+_("Storage size unavailable");}});}catch(Error e){}
+                        var icon=new Gtk.Button.from_icon_name("image-x-generic-symbolic");icon.tooltip_text=_("Change Icon");icon.valign=Gtk.Align.CENTER;row.add_suffix(icon);icon.clicked.connect(()=>change_icon.begin(app,metadata,row));
+                        var rename=new Gtk.Button.from_icon_name("document-edit-symbolic");rename.valign=Gtk.Align.CENTER;rename.tooltip_text=_("Rename");row.add_suffix(rename);rename.clicked.connect(()=>{var dialog=new Adw.AlertDialog(_("Rename Application"),null);var name=new Gtk.Entry();name.text=metadata.name;dialog.extra_child=name;dialog.add_response("cancel",_("Cancel"));dialog.add_response("save",_("Save"));dialog.response.connect((id)=>{if(id!="save")return;string text=name.text;app.storage.run((store)=>{try{WebAppManager.rename(store,metadata,text,Environment.get_user_data_dir());Idle.add(()=>{row.title=metadata.name;return Source.REMOVE;});}catch(Error e){string error=e.message;Idle.add(()=>{EngineDialogs.show_error(this,error);return Source.REMOVE;});}});});dialog.present(this);});
+                        var permissions=new Gtk.Button.from_icon_name("security-high-symbolic");permissions.valign=Gtk.Align.CENTER;permissions.tooltip_text=_("Permissions");row.add_suffix(permissions);permissions.clicked.connect(()=>new PolicyDialog(app,metadata.id).present(this));
                         var open=new Gtk.Button.from_icon_name("media-playback-start-symbolic");open.tooltip_text=_("Open");open.valign=Gtk.Align.CENTER;row.add_suffix(open);open.clicked.connect(()=>{try{new Subprocess.newv({"majoris-browser","--app="+metadata.id},SubprocessFlags.NONE);}catch(Error e){EngineDialogs.show_error(this,e.message);}});
                         var pin=new Gtk.Button.from_icon_name("view-pin-symbolic");pin.tooltip_text=_("Pin to Dock");pin.valign=Gtk.Align.CENTER;row.add_suffix(pin);pin.clicked.connect(()=>{if(!new DesktopShellIntegration().set_pinned(metadata.desktop_name,true))EngineDialogs.show_error(this,_("Dock integration is unavailable."));});
+                        var unpin=new Gtk.Button.from_icon_name("view-more-symbolic");unpin.tooltip_text=_("Unpin from Dock");unpin.valign=Gtk.Align.CENTER;row.add_suffix(unpin);unpin.clicked.connect(()=>{if(!new DesktopShellIntegration().set_pinned(metadata.desktop_name,false))EngineDialogs.show_error(this,_("Dock integration is unavailable."));});
                         var clear_app=new Gtk.Button.from_icon_name("edit-clear-all-symbolic");clear_app.tooltip_text=_("Clear Application Data");clear_app.valign=Gtk.Align.CENTER;row.add_suffix(clear_app);
                         clear_app.clicked.connect(()=>{
                             var confirm=new Adw.AlertDialog(_("Clear Application Data?"),_("Close this application first. This removes its sign-in sessions and site storage, independently of Browser."));confirm.add_response("cancel",_("Cancel"));confirm.add_response("clear",_("Clear"));confirm.set_response_appearance("clear",Adw.ResponseAppearance.DESTRUCTIVE);confirm.response.connect((id)=>{
@@ -43,14 +69,17 @@ namespace MajorisBrowser {
                         });
                         var remove=new Gtk.Button.from_icon_name("user-trash-symbolic");remove.tooltip_text=_("Uninstall");remove.valign=Gtk.Align.CENTER;row.add_suffix(remove);
                         remove.clicked.connect(()=>{
-                            var confirm=new Adw.AlertDialog(_("Uninstall Application?"),_("Its site data will be retained. Close the app before uninstalling."));confirm.add_response("cancel",_("Cancel"));confirm.add_response("remove",_("Uninstall"));confirm.set_response_appearance("remove",Adw.ResponseAppearance.DESTRUCTIVE);
-                            confirm.response.connect((id)=>{if(id=="remove"){
-                                try{File.new_for_path(Path.build_filename(Environment.get_user_data_dir(),"applications",metadata.desktop_name)).delete();new DesktopShellIntegration().set_pinned(metadata.desktop_name,false);app.storage.run((s)=>s.delete_app(metadata.id));apps.remove(row);}catch(Error e){EngineDialogs.show_error(this,e.message);}
+                            var confirm=new Adw.AlertDialog(_("Uninstall Application?"),_("Close the app first. Choose whether to retain its site data."));confirm.add_response("cancel",_("Cancel"));confirm.add_response("remove",_("Keep Data"));confirm.add_response("erase",_("Remove Data"));confirm.set_response_appearance("erase",Adw.ResponseAppearance.DESTRUCTIVE);
+                            confirm.response.connect((id)=>{if(id=="remove" || id=="erase"){
+                                bool erase=id=="erase";app.storage.run((store)=>{try{WebAppManager.uninstall(store,metadata,Environment.get_user_data_dir(),erase);Idle.add(()=>{new DesktopShellIntegration().set_pinned(metadata.desktop_name,false);apps.remove(row);return Source.REMOVE;});}catch(Error e){string error=e.message;Idle.add(()=>{EngineDialogs.show_error(this,error);return Source.REMOVE;});}});
                             }});confirm.present(this);
                         });
                     }return Source.REMOVE;
                 });
             });
+        }
+        private async void change_icon(Application app,WebApp metadata,Adw.ActionRow row){
+            try{var dialog=new Gtk.FileDialog();var file=yield dialog.open(get_root() as Gtk.Window,null);string? path=file.get_path();if(path==null)throw new IOError.NOT_SUPPORTED("Select a local image");app.storage.run((store)=>{try{WebAppManager.update_icon(store,metadata,path,Environment.get_user_data_dir());Idle.add(()=>{var image=new Gtk.Image.from_file(metadata.icon_path);image.pixel_size=40;row.add_prefix(image);return Source.REMOVE;});}catch(Error e){string text=e.message;Idle.add(()=>{EngineDialogs.show_error(this,text);return Source.REMOVE;});}});}catch(Error e){if(!(e is Gtk.DialogError.DISMISSED))EngineDialogs.show_error(this,e.message);}
         }
     }
 }

@@ -1,1 +1,1 @@
-{"name":"Fixture App","short_name":"Fixture","start_url":"/platform.html","scope":"/","display":"standalone"}
+{"name":"Fixture App","short_name":"Fixture","start_url":"/platform.html","scope":"/","display":"standalone","icons":[{"src":"/app-icon.svg","sizes":"256x256","type":"image/svg+xml"}],"theme_color":"#304d80","background_color":"#ffffff"}

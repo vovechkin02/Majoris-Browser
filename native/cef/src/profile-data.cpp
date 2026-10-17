@@ -3,44 +3,61 @@
 #include <gio/gio.h>
 #include <fcntl.h>
 #include <sys/file.h>
+#include <sys/stat.h>
+#include <dirent.h>
 #include <unistd.h>
 #include <cerrno>
 #include <string>
 
+// Hold real parent directories rather than resolving a mutable pathname again
+// during deletion. Neither parent traversal nor recursion follows symlinks.
+static int checked_parent(const char *path,GError **error){
+  gchar *base=g_path_get_basename(path);
+  bool invalid_base=!*base || std::string(base)=="/" || std::string(base)=="." || std::string(base)=="..";g_free(base);
+  if(!g_path_is_absolute(path) || invalid_base){
+    g_set_error_literal(error,G_IO_ERROR,G_IO_ERROR_INVALID_ARGUMENT,"Invalid profile root");return -1;
+  }
+  gchar *parent=g_path_get_dirname(path);gchar **parts=g_strsplit(parent,"/",-1);g_free(parent);
+  int descriptor=open("/",O_RDONLY|O_DIRECTORY|O_CLOEXEC);
+  for(size_t i=0;parts[i] && descriptor>=0;i++){
+    if(!*parts[i] || std::string(parts[i])==".")continue;
+    if(std::string(parts[i])==".."){close(descriptor);descriptor=-1;errno=EINVAL;break;}
+    int next=openat(descriptor,parts[i],O_RDONLY|O_DIRECTORY|O_CLOEXEC|O_NOFOLLOW);int saved=errno;close(descriptor);descriptor=next;errno=saved;
+  }
+  g_strfreev(parts);
+  if(descriptor<0)g_set_error_literal(error,G_IO_ERROR,G_IO_ERROR_INVALID_ARGUMENT,"Refusing a symlinked or inaccessible profile parent");
+  return descriptor;
+}
 int majoris_profile_acquire(const char *path,GError **error){
+  if(!g_path_is_absolute(path) || std::string(path)=="/"){g_set_error_literal(error,G_IO_ERROR,G_IO_ERROR_INVALID_ARGUMENT,"Invalid profile root");return -1;}
   gchar *parent=g_path_get_dirname(path);
   if(g_mkdir_with_parents(parent,0700)!=0){g_free(parent);g_set_error_literal(error,G_IO_ERROR,G_IO_ERROR_FAILED,"Cannot create profile parent directory");return -1;}g_free(parent);
-  std::string lock=std::string(path)+".lock";
-  int fd=open(lock.c_str(),O_CREAT|O_RDWR|O_CLOEXEC|O_NOFOLLOW,0600);
-  if(fd<0 || flock(fd,LOCK_EX|LOCK_NB)!=0){
-    if(fd>=0)close(fd);
-    g_set_error_literal(error,G_IO_ERROR,G_IO_ERROR_BUSY,"The profile is in use; close its application before clearing data");return -1;
-  }return fd;
+  int directory=checked_parent(path,error);if(directory<0)return -1;
+  gchar *base=g_path_get_basename(path);std::string lock=std::string(base)+".lock";g_free(base);
+  int descriptor=openat(directory,lock.c_str(),O_CREAT|O_RDWR|O_CLOEXEC|O_NOFOLLOW,0600);close(directory);
+  if(descriptor<0 || flock(descriptor,LOCK_EX|LOCK_NB)!=0){if(descriptor>=0)close(descriptor);g_set_error_literal(error,G_IO_ERROR,G_IO_ERROR_BUSY,"The profile is in use; close its application before clearing data");return -1;}
+  return descriptor;
 }
-void majoris_profile_release(int fd){if(fd>=0){flock(fd,LOCK_UN);close(fd);}}
-
-static gboolean remove_tree(GFile *file,GError **error){
-  auto type=g_file_query_file_type(file,G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS,nullptr);
-  if(type==G_FILE_TYPE_DIRECTORY){
-    GFileEnumerator *items=g_file_enumerate_children(file,G_FILE_ATTRIBUTE_STANDARD_NAME,G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS,nullptr,error);
-    if(!items)return false;
-    while(true){
-      GFileInfo *info=g_file_enumerator_next_file(items,nullptr,error);
-      if(!info)break;
-      GFile *child=g_file_get_child(file,g_file_info_get_name(info));g_object_unref(info);
-      bool ok=remove_tree(child,error);g_object_unref(child);
-      if(!ok){g_object_unref(items);return false;}
-    }
-    g_object_unref(items);if(error && *error)return false;
-  }
-  if(!g_file_query_exists(file,nullptr) && type!=G_FILE_TYPE_SYMBOLIC_LINK)return true;
-  return g_file_delete(file,nullptr,error);
+void majoris_profile_release(int descriptor){if(descriptor>=0){flock(descriptor,LOCK_UN);close(descriptor);}}
+static gboolean failure(GError **error,const char *message){g_set_error(error,G_IO_ERROR,g_io_error_from_errno(errno),"%s: %s",message,g_strerror(errno));return false;}
+static gboolean remove_at(int parent,const char *name,int depth,GError **error){
+  if(depth>128){g_set_error_literal(error,G_IO_ERROR,G_IO_ERROR_FAILED,"Profile directory nesting exceeds the clearing limit");return false;}
+  struct stat info;if(fstatat(parent,name,&info,AT_SYMLINK_NOFOLLOW)!=0){if(errno==ENOENT)return true;return failure(error,"Cannot inspect profile entry");}
+  if(!S_ISDIR(info.st_mode)){if(unlinkat(parent,name,0)!=0 && errno!=ENOENT)return failure(error,"Cannot remove profile entry");return true;}
+  int descriptor=openat(parent,name,O_RDONLY|O_DIRECTORY|O_CLOEXEC|O_NOFOLLOW);if(descriptor<0)return failure(error,"Cannot open profile directory");
+  DIR *directory=fdopendir(descriptor);if(!directory){close(descriptor);return failure(error,"Cannot enumerate profile directory");}
+  bool result=true;struct dirent *entry;
+  while(true){errno=0;entry=readdir(directory);if(!entry){if(errno)result=failure(error,"Cannot enumerate profile directory");break;}if(std::string(entry->d_name)=="." || std::string(entry->d_name)=="..")continue;if(!remove_at(descriptor,entry->d_name,depth+1,error)){result=false;break;}}
+  closedir(directory);if(!result)return false;
+  if(unlinkat(parent,name,AT_REMOVEDIR)!=0 && errno!=ENOENT)return failure(error,"Cannot remove profile directory");return true;
+}
+gboolean mc_profile_clear_locked(const char *path,GError **error){
+  int parent=checked_parent(path,error);if(parent<0)return false;gchar *base=g_path_get_basename(path);struct stat info;
+  if(fstatat(parent,base,&info,AT_SYMLINK_NOFOLLOW)==0 && S_ISLNK(info.st_mode)){g_set_error_literal(error,G_IO_ERROR,G_IO_ERROR_INVALID_ARGUMENT,"Refusing a symlinked profile root");g_free(base);close(parent);return false;}
+  bool result=remove_at(parent,base,0,error);g_free(base);close(parent);return result;
 }
 gboolean mc_profile_clear(const char *path,GError **error){
-  if(!g_path_is_absolute(path) || g_file_test(path,G_FILE_TEST_IS_SYMLINK)){
-    g_set_error_literal(error,G_IO_ERROR,G_IO_ERROR_INVALID_ARGUMENT,"Refusing an invalid or symlinked profile root");return false;
-  }
-  int fd=majoris_profile_acquire(path,error);if(fd<0)return false;
-  GFile *file=g_file_new_for_path(path);bool result=remove_tree(file,error);g_object_unref(file);
-  majoris_profile_release(fd);return result;
+  int descriptor=majoris_profile_acquire(path,error);if(descriptor<0)return false;bool result=mc_profile_clear_locked(path,error);majoris_profile_release(descriptor);return result;
 }
+int mc_profile_acquire(const char *path,GError **error){return majoris_profile_acquire(path,error);}
+void mc_profile_release(int descriptor){majoris_profile_release(descriptor);}

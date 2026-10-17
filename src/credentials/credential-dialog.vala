@@ -6,8 +6,8 @@ namespace MajorisBrowser {
         private Gtk.Label status=new Gtk.Label("");
         private string origin;
         private MajorisCef.View engine;
-        public CredentialDialog (string origin,MajorisCef.View engine) {
-            this.origin=origin;this.engine=engine;store=new CredentialStore("browser");
+        public CredentialDialog (string origin,MajorisCef.View engine,string profile="browser",string initial_username="") {
+            this.origin=origin;this.engine=engine;store=new CredentialStore(profile);username.text=initial_username;
             title=_("Site Password");content_width=420;
             var layout=new Adw.ToolbarView();layout.add_top_bar(new Adw.HeaderBar());
             var box=new Gtk.Box(Gtk.Orientation.VERTICAL,12);box.margin_start=18;box.margin_end=18;box.margin_top=12;box.margin_bottom=18;

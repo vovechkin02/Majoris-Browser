@@ -12,8 +12,9 @@ namespace MajorisBrowser {
                 string host=uri.get_host().ascii_down();
                 if(host=="accounts.google.com" && query.contains("continue"))
                     return app_policy.classify(query["continue"])==NavigationDecision.APP_SCOPE;
-                if(host!="login.microsoftonline.com" && host!="accounts.spotify.com" && host!="accounts.google.com")return false;
                 if(!query.contains("redirect_uri") || !query.contains("state") || !query.contains("client_id"))return false;
+                bool recognized=host=="login.microsoftonline.com" || host=="accounts.spotify.com" || host=="accounts.google.com";
+                if(!recognized && (!query.contains("response_type") || query["response_type"]!="code"))return false;
                 return query["state"].length>=16 && query["client_id"]!="" && app_policy.classify(query["redirect_uri"])==NavigationDecision.APP_SCOPE;
             }catch(Error e){return false;}
         }

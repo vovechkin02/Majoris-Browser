@@ -4,3 +4,16 @@ src/web-app-window.vala
 src/settings/preferences-window.vala
 src/ui/engine-dialogs.vala
 src/ui/task-manager.vala
+src/ui/browser-surface.vala
+src/ui/page-actions.vala
+src/bookmarks/bookmarks-dialog.vala
+src/credentials/credential-controller.vala
+src/credentials/credential-dialog.vala
+src/credentials/credential-manager.vala
+src/credentials/address-dialog.vala
+src/downloads/download-record.vala
+src/downloads/download-service.vala
+src/downloads/downloads-dialog.vala
+src/navigation/omnibox.vala
+src/permissions/policy-dialog.vala
+src/settings/import-dialog.vala

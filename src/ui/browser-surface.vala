@@ -4,8 +4,31 @@ namespace MajorisBrowser {
         public string url = "about:blank";
         public string page_title = "New Tab";
         public bool has_frame;
+        public bool loading;
+        public bool can_go_back;
+        public bool can_go_forward;
+        public string security=_("Connection information is not available yet");
+        public Bytes? favicon;
         public signal void changed (string kind, string value);
-        public void close () { engine.close (); }
+        public bool closed { get; protected set; }
+        private bool close_pending;
+        public void close () { if(closed)return;closed=true;engine.close (); }
+        public async bool request_close () {
+            if(closed)return true;
+            if(close_pending)return false;
+            close_pending=true;bool accepted=false,resolved=false;
+            ulong handler=engine.event.connect((kind,value)=>{
+                if(!resolved && (kind=="closed" || kind=="close-cancelled")){
+                    resolved=true;
+                    accepted=kind=="closed";
+                    Idle.add(()=>{request_close.callback();return Source.REMOVE;});
+                }
+            });
+            engine.request_close();yield;
+            engine.disconnect(handler);close_pending=false;
+            if(accepted)closed=true;
+            return accepted;
+        }
         public void navigate (string target) { engine.load (target); }
     }
     public class OffscreenBrowserSurface : BrowserSurface {
@@ -13,24 +36,53 @@ namespace MajorisBrowser {
         private Gtk.IMMulticontext im;
         private double pointer_x;
         private double pointer_y;
-        public OffscreenBrowserSurface (string profile, bool ephemeral, string target, string scope = "") {
+        private Gtk.Box error_box=new Gtk.Box(Gtk.Orientation.VERTICAL,12);
+        private Gtk.Label error_message=new Gtk.Label("");
+        public OffscreenBrowserSurface (string profile, bool ephemeral, string target, string scope = "",string permissions="[]") {
+            this.with_engine(new MajorisCef.View.with_permissions(profile,ephemeral,target,scope,permissions));
+        }
+        public OffscreenBrowserSurface.with_engine(MajorisCef.View supplied) {
             hexpand = true; vexpand = true; focusable = true;
-            engine = new MajorisCef.View (profile, ephemeral, target, scope);
+            error_box.set_parent(this);error_box.halign=Gtk.Align.CENTER;error_box.valign=Gtk.Align.CENTER;error_box.visible=false;error_message.wrap=true;error_box.append(error_message);
+            var retry=new Gtk.Button.with_label(_("Reload Page"));error_box.append(retry);retry.clicked.connect(()=>{error_box.visible=false;engine.command("reload");});
+            engine = supplied;
+            var text_drop=new Gtk.DropTarget(typeof(string),Gdk.DragAction.COPY);
+            text_drop.on_drop.connect((value,x,y)=>{string? text=value.get_string();if(text==null || text.length>8*1024*1024 || closed)return false;engine.drop(text,"[]",(int)x,(int)y);return true;});add_controller(text_drop);
+            var file_drop=new Gtk.DropTarget(typeof(Gdk.FileList),Gdk.DragAction.COPY);
+            file_drop.on_drop.connect((value,x,y)=>{var files=(Gdk.FileList)value.get_boxed();if(files==null || closed)return false;var b=new Json.Builder();b.begin_array();int count=0;foreach(var file in files.get_files()){string? path=file.get_path();if(path!=null && ++count<=100)b.add_string_value(path);}b.end_array();var g=new Json.Generator();g.set_root(b.get_root());engine.drop("",g.to_data(null),(int)x,(int)y);return true;});add_controller(file_drop);
             engine.frame.connect ((bytes,w,h) => {
                 has_frame=true;
                 texture = new Gdk.MemoryTexture (w,h,Gdk.MemoryFormat.B8G8R8A8_PREMULTIPLIED,bytes,w*4);
                 queue_draw ();
             });
             engine.event.connect ((kind,value) => {
-                if (kind == "url") url = value;
+                if(closed)return;
+                if(kind=="closed"){closed=true;changed(kind,value);return;}
+                if (kind == "url") {url = value;security=_("Connection information is not available yet");}
+                if(kind=="security")security=value;
+                if(kind=="focus-request"){var window=get_root() as Gtk.Window;if(window!=null){window.present();grab_focus();}}
+                if(kind=="image:favicon" && value!="")favicon=new Bytes(Base64.decode(value));
+                if(kind=="ime-caret"){var fields=value.split(",");if(fields.length==4){Gdk.Rectangle rect={int.parse(fields[0]),int.parse(fields[1]),int.parse(fields[2]),int.parse(fields[3])};im.set_cursor_location(rect);}}
                 if (kind == "title") page_title = value;
+                if(kind=="error" || kind=="crashed"){error_message.label=kind=="crashed"?_("This page stopped responding. Reload to continue."):_("This page could not be loaded.")+"\n"+value;error_box.visible=true;queue_allocate();}
+                if(kind=="loading" && value=="1")error_box.visible=false;
+                if(kind=="loading")loading=value=="1";
+                if(kind=="back")can_go_back=value=="1";
+                if(kind=="forward")can_go_forward=value=="1";
                 if (kind == "tooltip") tooltip_text = value;
                 if (kind == "cursor") set_cursor_from_name (value);
                 if (kind == "ready") engine.resize (get_width (),get_height (),get_scale_factor ());
                 changed (kind,value);
             });
             im = new Gtk.IMMulticontext (); im.set_client_widget (this);
-            im.commit.connect ((text) => engine.text (text));
+            im.commit.connect ((text) => engine.ime (text,0,true));
+            im.preedit_changed.connect (() => {
+                string text;Pango.AttrList attrs;int cursor;im.get_preedit_string(out text,out attrs,out cursor);
+                // CEF positions are UTF-16 code units; GTK supplies Unicode characters.
+                string prefix=text.substring(0,text.index_of_nth_char(cursor));
+                int units=0;for(int i=0;i<prefix.char_count();i++)units+=prefix.get_char(prefix.index_of_nth_char(i))>0xffff?2:1;
+                engine.ime(text,units,false);
+            });
             var focus = new Gtk.EventControllerFocus ();
             focus.enter.connect (() => { engine.focus (true); im.focus_in (); });
             focus.leave.connect (() => { engine.focus (false); im.focus_out (); }); add_controller (focus);
@@ -44,10 +96,7 @@ namespace MajorisBrowser {
             var keys = new Gtk.EventControllerKey (); keys.set_im_context (im);
             keys.key_pressed.connect ((key,code,state) => {
                 engine.key (0,windows_key (key),(int)code,modifiers (state));
-                if ((state & (Gdk.ModifierType.CONTROL_MASK | Gdk.ModifierType.ALT_MASK)) == 0) {
-                    unichar c = Gdk.keyval_to_unicode (key);
-                    if (c >= 32) engine.text (c.to_string ());
-                }
+                if(key==Gdk.Key.Return && (state & (Gdk.ModifierType.CONTROL_MASK|Gdk.ModifierType.ALT_MASK))==0)engine.text("\r");
                 return true;
             });
             keys.key_released.connect ((key,code,state) => engine.key (1,windows_key (key),(int)code,modifiers (state))); add_controller (keys);
@@ -72,13 +121,17 @@ namespace MajorisBrowser {
             return result;
         }
         public override void size_allocate (int width,int height,int baseline) {
-            engine.resize (width,height,get_scale_factor ());
+            double scale=get_scale_factor();var native=get_native();if(native!=null && native.get_surface()!=null)scale=native.get_surface().get_scale();
+            engine.resize (width,height,scale);
+            if(error_box.visible)error_box.allocate(width,height,baseline,null);
         }
         public override void snapshot (Gtk.Snapshot snapshot) {
+            if(error_box.visible){snapshot_child(error_box,snapshot);return;}
             if (texture != null) {
                 Graphene.Rect rect = Graphene.Rect (); rect.init (0,0,get_width (),get_height ());
                 snapshot.append_texture (texture,rect);
             }
         }
+        protected override void dispose(){if(error_box.get_parent()!=null)error_box.unparent();base.dispose();}
     }
 }

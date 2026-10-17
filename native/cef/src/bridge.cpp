@@ -8,13 +8,19 @@
 #include "include/cef_task.h"
 #include "include/cef_task_manager.h"
 #include "include/cef_urlrequest.h"
+#include "include/cef_devtools_message_observer.h"
 #include "include/cef_version.h"
+#include "include/cef_version_info.h"
+#include "include/cef_pack_strings.h"
 #include <atomic>
+#include <algorithm>
 #include <condition_variable>
+#include <cmath>
 #include <cstring>
 #include <dlfcn.h>
 #include <functional>
 #include <map>
+#include <set>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -42,8 +48,11 @@ void gtk(std::function<void()> f) {
 std::mutex lifecycle_mutex;
 std::condition_variable lifecycle_cv;
 int live = 0;
+std::string chrome_version(){return std::to_string(cef_version_info(4))+"."+std::to_string(cef_version_info(5))+"."+std::to_string(cef_version_info(6))+"."+std::to_string(cef_version_info(7));}
+std::string user_agent(){return "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/"+chrome_version()+" Safari/537.36 Majoris/" MAJORIS_VERSION;}
 int profile_lock=-1;
 class Client;
+CefRefPtr<CefDownloadImageCallback> image_callback(CefRefPtr<Client> client,std::string tag);
 std::map<std::string,std::pair<CefRefPtr<CefRequestContext>,int>> private_contexts;
 struct State {
   CefRefPtr<Client> client;
@@ -51,13 +60,13 @@ struct State {
 }
 struct _McView { GObject parent_instance; State *state; };
 G_DEFINE_TYPE(McView, mc_view, G_TYPE_OBJECT)
-static guint signals[3];
+static guint signals[4];
 
 namespace {
 class Client : public CefClient, public CefLifeSpanHandler, public CefRenderHandler,
  public CefDisplayHandler, public CefLoadHandler, public CefRequestHandler,
  public CefContextMenuHandler, public CefJSDialogHandler, public CefDialogHandler,
- public CefDownloadHandler, public CefPermissionHandler {
+ public CefDownloadHandler, public CefPermissionHandler, public CefDevToolsMessageObserver, public CefPrintHandler, public CefFocusHandler {
  public:
   GWeakRef view;
   CefRefPtr<CefBrowser> browser;
@@ -65,6 +74,7 @@ class Client : public CefClient, public CefLifeSpanHandler, public CefRenderHand
   int width=800, height=600;
   float scale=1;
   bool closing=false;
+  bool close_requested=false;
   std::string scope;
   std::string private_key;
   std::string auth_origin;
@@ -78,8 +88,81 @@ class Client : public CefClient, public CefLifeSpanHandler, public CefRenderHand
   }
   int token=0;
   std::map<int,std::function<void(bool,std::string)>> replies;
+  std::map<int,std::string> reply_kinds;
+  std::map<uint64_t,int> permission_prompts;
+  std::map<int,CefRefPtr<Client>> popup_children;
+  CefRefPtr<Client> opener;
+  int popup_id=0;
+  std::map<std::string,std::map<std::string,int>> permission_policy;
+  std::set<std::string> permission_origins;
+  std::set<std::string> temporary_permission_origins;
+  static const std::map<std::string,cef_content_setting_types_t>& permission_types(){
+    static const std::map<std::string,cef_content_setting_types_t> types={{"camera",CEF_CONTENT_SETTING_TYPE_MEDIASTREAM_CAMERA},{"microphone",CEF_CONTENT_SETTING_TYPE_MEDIASTREAM_MIC},{"location",CEF_CONTENT_SETTING_TYPE_GEOLOCATION},{"notifications",CEF_CONTENT_SETTING_TYPE_NOTIFICATIONS},{"clipboard",CEF_CONTENT_SETTING_TYPE_CLIPBOARD_READ_WRITE},{"multiple downloads",CEF_CONTENT_SETTING_TYPE_AUTOMATIC_DOWNLOADS},{"pointer lock",CEF_CONTENT_SETTING_TYPE_POINTER_LOCK},{"keyboard lock",CEF_CONTENT_SETTING_TYPE_KEYBOARD_LOCK},{"storage access",CEF_CONTENT_SETTING_TYPE_STORAGE_ACCESS},{"local fonts",CEF_CONTENT_SETTING_TYPE_LOCAL_FONTS},{"popups",CEF_CONTENT_SETTING_TYPE_POPUPS}};return types;
+  }
+  void apply_permissions(const std::string &site){
+    if(!context || site.empty())return;permission_origins.insert(site);
+    for(auto &[kind,type]:permission_types()){int value=permission_policy[site][kind];context->SetContentSetting(site,site,type,value==1?CEF_CONTENT_SETTING_VALUE_ALLOW:value==2?CEF_CONTENT_SETTING_VALUE_BLOCK:CEF_CONTENT_SETTING_VALUE_DEFAULT);}
+  }
+  void set_permissions(const std::string &text){
+    auto data=CefParseJSON(text,JSON_PARSER_RFC);if(!data || data->GetType()!=VTYPE_LIST)return;permission_policy.clear();auto rows=data->GetList();
+    for(size_t i=0;i<rows->GetSize() && i<10000;i++){auto row=rows->GetDictionary(i);if(!row)continue;auto site=row->GetString("origin").ToString(),kind=row->GetString("kind").ToString();int value=row->GetInt("value");CefURLParts parts;if(!CefParseURL(site,parts) || (CefString(&parts.scheme)!="https" && CefString(&parts.scheme)!="http") || !permission_types().contains(kind) || value<0 || value>2)continue;site=CefString(&parts.origin);permission_policy[site][kind]=value;permission_origins.insert(site);}
+    auto origins=permission_origins;for(auto &site:origins)apply_permissions(site);
+  }
   std::map<uint32_t,CefRefPtr<CefDownloadItemCallback>> downloads;
   CefRefPtr<CefURLRequest> manifest_request;
+  CefRefPtr<CefRegistration> devtools_registration;
+  int protocol_id=1000;
+  std::map<std::string,bool> media_players;
+  std::map<int,std::string> protocol_operations;
+  int credential_context=0;
+  std::string credential_origin;
+  int credential_status=0;
+  void protocol(std::string method,CefRefPtr<CefDictionaryValue> params,std::string operation){
+    if(!browser || closing)return;
+    int id=++protocol_id;protocol_operations[id]=operation;
+    if(!browser->GetHost()->ExecuteDevToolsMethod(id,method,params)){protocol_operations.erase(id);event("operation-error",operation);}
+  }
+  void OnDevToolsMethodResult(CefRefPtr<CefBrowser>,int id,bool success,const void *result,size_t size) override {
+    auto it=protocol_operations.find(id);if(it==protocol_operations.end())return;
+    auto operation=it->second;protocol_operations.erase(it);
+    if(operation=="picture-in-picture"){
+      auto data=CefParseJSON(std::string(static_cast<const char*>(result),size),JSON_PARSER_RFC);bool failed=!success || !data || data->GetType()!=VTYPE_DICTIONARY || data->GetDictionary()->HasKey("exceptionDetails");event(failed?"operation-error":"operation-complete",failed?"Picture-in-picture is unavailable for this media":operation);return;
+    }
+    if(operation=="print" || operation=="save-pdf" || operation=="save-page"){
+      if(!success){event("operation-error",operation);return;}auto parsed=CefParseJSON(std::string(static_cast<const char*>(result),size),JSON_PARSER_RFC);if(!parsed || parsed->GetType()!=VTYPE_DICTIONARY)return;
+      auto data=parsed->GetDictionary()->GetString("data").ToString();if(data.size()>64*1024*1024){event("operation-error",operation+": output exceeds 64 MiB");return;}event(operation,data);return;
+    }
+    if(operation.starts_with("credential-")){
+      if(!success || closing)return;
+      auto parsed=CefParseJSON(std::string(static_cast<const char*>(result),size),JSON_PARSER_RFC);if(!parsed || parsed->GetType()!=VTYPE_DICTIONARY)return;auto data=parsed->GetDictionary();
+      if(operation=="credential-frame"){
+        auto tree=data->GetDictionary("frameTree");if(!tree)return;auto frame=tree->GetDictionary("frame");if(!frame || origin(frame->GetString("url"))!=credential_origin)return;
+        auto args=CefDictionaryValue::Create();args->SetString("frameId",frame->GetString("id"));args->SetString("worldName","majoris-credentials");protocol("Page.createIsolatedWorld",args,"credential-world");
+      }else if(operation=="credential-world"){
+        credential_context=data->GetInt("executionContextId");auto args=CefDictionaryValue::Create();args->SetString("name","majorisCredentialSubmit");args->SetInt("executionContextId",credential_context);protocol("Runtime.addBinding",args,"credential-binding");
+      }else if(operation=="credential-binding"){
+        auto args=CefDictionaryValue::Create();args->SetInt("contextId",credential_context);
+        args->SetString("expression",R"JS((()=>{if(globalThis.majorisCredentialObserver)return;globalThis.majorisCredentialObserver=true;document.addEventListener('submit',e=>{if(!e.isTrusted||!(e.target instanceof HTMLFormElement))return;const f=e.target;const action=new URL(f.action||location.href,location.href);if(action.origin!==location.origin||action.protocol!=='https:')return;const p=f.querySelector('input[type=password]:not([autocomplete=new-password])');if(!p||!p.value||p.disabled||!p.getClientRects().length)return;const u=f.querySelector('input[autocomplete=username],input[type=email],input[name=username],input[type=text]');majorisCredentialSubmit(JSON.stringify({username:u?u.value:'',password:p.value}));},true);return !!document.querySelector('input[type=password]');})())JS");protocol("Runtime.evaluate",args,"credential-observer");
+      }else if(operation=="credential-observer"){
+        auto value=data->GetDictionary("result");if(value && value->GetBool("value"))event("credential-form",credential_origin);else if(credential_status>=200 && credential_status<400)event("credential-complete",credential_origin);
+      }return;
+    }
+    if(operation=="evaluate"){event("evaluation",success?std::string(static_cast<const char*>(result),size):"{}");return;}
+    event(success?"operation-complete":"operation-error",operation);
+  }
+  void OnDevToolsEvent(CefRefPtr<CefBrowser>,const CefString &method,const void *params,size_t size) override {
+    if(method=="Runtime.bindingCalled"){
+      auto parsed=CefParseJSON(std::string(static_cast<const char*>(params),size),JSON_PARSER_RFC);if(!parsed || parsed->GetType()!=VTYPE_DICTIONARY)return;auto data=parsed->GetDictionary();
+      if(data->GetString("name")!="majorisCredentialSubmit" || data->GetInt("executionContextId")!=credential_context || !browser || origin(browser->GetMainFrame()->GetURL())!=credential_origin)return;
+      auto payload=CefParseJSON(data->GetString("payload"),JSON_PARSER_RFC);if(!payload || payload->GetType()!=VTYPE_DICTIONARY)return;auto value=payload->GetDictionary();if(value->GetString("password").length()>4096 || value->GetString("username").length()>1024)return;value->SetString("origin",credential_origin);event("credential-submit",CefWriteJSON(payload,JSON_WRITER_DEFAULT).ToString());return;
+    }
+    if(method!="Media.playerEventsAdded")return;
+    auto parsed=CefParseJSON(std::string(static_cast<const char*>(params),size),JSON_PARSER_RFC);if(!parsed || parsed->GetType()!=VTYPE_DICTIONARY)return;
+    auto data=parsed->GetDictionary();auto events=data->GetList("events");if(!events)return;
+    for(size_t i=0;i<events->GetSize();i++){auto item=events->GetDictionary(i);if(!item)continue;auto payload=CefParseJSON(item->GetString("value"),JSON_PARSER_RFC);if(!payload || payload->GetType()!=VTYPE_DICTIONARY)continue;
+      auto name=payload->GetDictionary()->GetString("event").ToString();if(name=="kPlay")media_players[data->GetString("playerId")]=true;else if(name=="kPause" || name=="kEnded")media_players[data->GetString("playerId")]=false;
+    }bool playing=false;for(auto &[id,active]:media_players)playing|=active;event("audio",playing?"1":"0");
+  }
   std::vector<uint8_t> view_pixels,popup_pixels;
   int pixel_width=0,pixel_height=0,popup_width=0,popup_height=0;
   CefRect popup_rect;
@@ -97,19 +180,21 @@ class Client : public CefClient, public CefLifeSpanHandler, public CefRenderHand
       if (v) { g_signal_emit(v,signals[1],0,kind.c_str(),value.c_str()); g_object_unref(v); }
     });
   }
-  void request(std::string kind, std::string origin, std::string message, std::function<void(bool,std::string)> cb) {
+  int request(std::string kind, std::string origin, std::string message, std::function<void(bool,std::string)> cb) {
     int id=++token;
     replies.emplace(id,std::move(cb));
+    reply_kinds[id]=kind;
     CefRefPtr<Client> keep(this);
     gtk([keep,id,kind=std::move(kind),origin=std::move(origin),message=std::move(message)] {
       auto *v=static_cast<McView*>(g_weak_ref_get(&keep->view));
       if (v) { g_signal_emit(v,signals[2],0,id,kind.c_str(),origin.c_str(),message.c_str()); g_object_unref(v); }
       else ui([keep,id] { keep->reply(id,false,""); });
     });
+    return id;
   }
   void reply(int id,bool yes,std::string text) {
     auto it=replies.find(id); if (it==replies.end()) return;
-    auto cb=std::move(it->second); replies.erase(it); cb(yes,std::move(text));
+    auto cb=std::move(it->second);replies.erase(it);reply_kinds.erase(id);cb(yes,std::move(text));
   }
   bool in_scope(const std::string &url) {
     if (scope.empty()) return true;
@@ -137,18 +222,53 @@ class Client : public CefClient, public CefLifeSpanHandler, public CefRenderHand
   CefRefPtr<CefDialogHandler> GetDialogHandler() override { return this; }
   CefRefPtr<CefDownloadHandler> GetDownloadHandler() override { return this; }
   CefRefPtr<CefPermissionHandler> GetPermissionHandler() override { return this; }
-  void OnAfterCreated(CefRefPtr<CefBrowser> b) override { browser=b; g_message("CEF: view ready");event("ready",""); if(closing) b->GetHost()->CloseBrowser(true); }
+  CefRefPtr<CefFocusHandler> GetFocusHandler() override {return this;}
+  bool OnSetFocus(CefRefPtr<CefBrowser>,FocusSource source) override {if(source==FOCUS_SOURCE_SYSTEM)event("focus-request","");return false;}
+  CefRefPtr<CefPrintHandler> GetPrintHandler() override {return this;}
+  void OnPrintStart(CefRefPtr<CefBrowser>) override {}
+  void OnPrintSettings(CefRefPtr<CefBrowser>,CefRefPtr<CefPrintSettings> settings,bool defaults) override {if(defaults){settings->SetDPI(300);settings->SetOrientation(false);settings->SetPrinterPrintableArea(CefSize(2480,3508),CefRect(0,0,2480,3508),false);}}
+  bool OnPrintDialog(CefRefPtr<CefBrowser>,bool,CefRefPtr<CefPrintDialogCallback> callback) override {
+    request("print-setup","Print page","",[callback](bool yes,std::string text){
+      auto value=CefParseJSON(text,JSON_PARSER_RFC);if(!yes || !value || value->GetType()!=VTYPE_DICTIONARY){callback->Cancel();return;}auto data=value->GetDictionary();auto settings=CefPrintSettings::Create();settings->SetDPI(300);settings->SetOrientation(data->GetBool("landscape"));int width=data->GetInt("width"),height=data->GetInt("height");if(width<=0 || height<=0 || width>30000 || height>30000){callback->Cancel();return;}settings->SetPrinterPrintableArea(CefSize(width,height),CefRect(0,0,width,height),false);callback->Continue(settings);
+    });return true;
+  }
+  bool OnPrintJob(CefRefPtr<CefBrowser>,const CefString&,const CefString &path,CefRefPtr<CefPrintJobCallback> callback) override {request("print-job","Print page",path.ToString(),[callback](bool,std::string){callback->Continue();});return true;}
+  void OnPrintReset(CefRefPtr<CefBrowser>) override {event("print-reset","");}
+  CefSize GetPdfPaperSize(CefRefPtr<CefBrowser>,int dpi) override {return CefSize(static_cast<int>(8.2677*dpi),static_cast<int>(11.6929*dpi));}
+  void OnAfterCreated(CefRefPtr<CefBrowser> b) override {
+    if(opener){opener->popup_children.erase(popup_id);opener=nullptr;}
+    browser=b;devtools_registration=b->GetHost()->AddDevToolsMessageObserver(this);
+    auto params=CefDictionaryValue::Create();params->SetString("userAgent",user_agent());params->SetString("platform","Linux x86_64");
+    auto metadata=CefDictionaryValue::Create();metadata->SetString("platform","Linux");metadata->SetString("platformVersion","");metadata->SetString("architecture","x86");metadata->SetString("bitness","64");metadata->SetString("model","");metadata->SetBool("mobile",false);metadata->SetString("fullVersion",chrome_version());
+    for(auto field:{"brands","fullVersionList"}){auto list=CefListValue::Create();auto brand=CefDictionaryValue::Create();brand->SetString("brand","Chromium");brand->SetString("version",std::string(field)=="brands"?std::to_string(cef_version_info(4)):chrome_version());list->SetDictionary(0,brand);auto majoris=CefDictionaryValue::Create();majoris->SetString("brand","Majoris");majoris->SetString("version",std::string(field)=="brands"?std::string(MAJORIS_VERSION).substr(0,std::string(MAJORIS_VERSION).find('.')):MAJORIS_VERSION);list->SetDictionary(1,majoris);metadata->SetList(field,list);}params->SetDictionary("userAgentMetadata",metadata);
+    protocol("Emulation.setUserAgentOverride",params,"user-agent");protocol("Runtime.enable",nullptr,"runtime-events");protocol("Media.enable",nullptr,"media-events");g_message("CEF: view ready");event("ready",""); if(closing) b->GetHost()->CloseBrowser(true);else if(close_requested)b->GetHost()->CloseBrowser(false);
+  }
+  bool DoClose(CefRefPtr<CefBrowser>) override {closing=true;return false;}
   void OnBeforeClose(CefRefPtr<CefBrowser>) override {
+    for(auto &site:temporary_permission_origins)apply_permissions(site);temporary_permission_origins.clear();
     auto pending=std::move(replies); for(auto &[id,cb]:pending) cb(false,"");
     if(!private_key.empty()){auto it=private_contexts.find(private_key);if(it!=private_contexts.end() && --it->second.second==0)private_contexts.erase(it);}
     if(manifest_request){manifest_request->Cancel();manifest_request=nullptr;}
-    downloads.clear();browser=nullptr; context=nullptr; event("closed","");
+    for(auto &[id,callback]:downloads)callback->Cancel();downloads.clear();
+    devtools_registration=nullptr;protocol_operations.clear();browser=nullptr;context=nullptr;event("closed","");
     { std::lock_guard lock(lifecycle_mutex); --live; } lifecycle_cv.notify_all();
   }
-  bool OnBeforePopup(CefRefPtr<CefBrowser>,CefRefPtr<CefFrame>,int,const CefString &url,const CefString&,cef_window_open_disposition_t,bool gesture,const CefPopupFeatures&,CefWindowInfo&,CefRefPtr<CefClient>&,CefBrowserSettings&,CefRefPtr<CefDictionaryValue>&,bool*) override {
-    if(gesture) event("popup",url.ToString()); return true;
+  bool OnBeforePopup(CefRefPtr<CefBrowser>,CefRefPtr<CefFrame>,int id,const CefString &url,const CefString&,cef_window_open_disposition_t disposition,bool gesture,const CefPopupFeatures&,CefWindowInfo &window,CefRefPtr<CefClient> &client,CefBrowserSettings&,CefRefPtr<CefDictionaryValue>&,bool*) override {
+    if(!gesture || closing)return true;
+    auto *child=static_cast<McView*>(g_object_new(MC_TYPE_VIEW,nullptr));auto keep=CefRefPtr<Client>(new Client(child,scope));child->state->client=keep;keep->context=context;keep->opener=this;keep->popup_id=id;keep->auth_origin=auth_origin;keep->auth_deadline=auth_deadline;keep->permission_policy=permission_policy;
+    if(!private_key.empty()){keep->private_key=private_key;++private_contexts[private_key].second;}
+    popup_children[id]=keep;{std::lock_guard lock(lifecycle_mutex);++live;}
+    window.SetAsWindowless(0);window.runtime_style=CEF_RUNTIME_STYLE_ALLOY;client=keep;
+    CefRefPtr<Client> parent(this);bool background=disposition==CEF_WOD_NEW_BACKGROUND_TAB,new_window=disposition==CEF_WOD_NEW_WINDOW || disposition==CEF_WOD_NEW_POPUP;std::string target=url;
+    gtk([parent,child,background,target,new_window]{auto *view=static_cast<McView*>(g_weak_ref_get(&parent->view));if(view){g_signal_emit(view,signals[3],0,child,background,target.c_str(),new_window);g_object_unref(view);}else mc_view_close(child);g_object_unref(child);});return false;
+  }
+  void OnBeforePopupAborted(CefRefPtr<CefBrowser>,int id) override {
+    auto it=popup_children.find(id);if(it==popup_children.end())return;auto child=it->second;popup_children.erase(it);child->opener=nullptr;
+    if(!child->private_key.empty()){auto found=private_contexts.find(child->private_key);if(found!=private_contexts.end() && --found->second.second==0)private_contexts.erase(found);child->private_key.clear();}
+    child->context=nullptr;child->closing=true;child->event("error","Popup creation was cancelled");child->event("closed","");{std::lock_guard lock(lifecycle_mutex);--live;}g_main_context_wakeup(g_main_context_default());
   }
   bool OnBeforeBrowse(CefRefPtr<CefBrowser>,CefRefPtr<CefFrame> f,CefRefPtr<CefRequest> r,bool,bool) override {
+    CefURLParts parts;if(CefParseURL(r->GetURL(),parts) && (CefString(&parts.scheme)=="https" || CefString(&parts.scheme)=="http"))apply_permissions(CefString(&parts.origin));
     if(f->IsMain()){
       auto target=r->GetURL().ToString();
       if(in_scope(target)){auth_origin.clear();auth_deadline=0;return false;}
@@ -156,21 +276,25 @@ class Client : public CefClient, public CefLifeSpanHandler, public CefRenderHand
       event("external",target);return true;
     }return false;
   }
-  bool OnOpenURLFromTab(CefRefPtr<CefBrowser>,CefRefPtr<CefFrame>,const CefString &url,cef_window_open_disposition_t,bool gesture) override {
-    if(gesture) event("popup",url.ToString()); return true;
+  bool OnOpenURLFromTab(CefRefPtr<CefBrowser>,CefRefPtr<CefFrame>,const CefString &url,cef_window_open_disposition_t disposition,bool gesture) override {
+    if(gesture) event(disposition==CEF_WOD_NEW_BACKGROUND_TAB?"popup-background":disposition==CEF_WOD_NEW_WINDOW?"popup-window":"popup",url.ToString()); return true;
   }
   void GetViewRect(CefRefPtr<CefBrowser>,CefRect &r) override { r=CefRect(0,0,width,height); }
   bool GetScreenInfo(CefRefPtr<CefBrowser>,CefScreenInfo &i) override { i.device_scale_factor=scale; i.rect=CefRect(0,0,width,height); i.available_rect=i.rect; return true; }
   void OnPopupShow(CefRefPtr<CefBrowser> b,bool visible) override {popup_visible=visible;if(!visible){popup_pixels.clear();b->GetHost()->Invalidate(PET_VIEW);}}
   void OnPopupSize(CefRefPtr<CefBrowser>,const CefRect &rect) override {popup_rect=rect;}
+  void OnImeCompositionRangeChanged(CefRefPtr<CefBrowser>,const CefRange &range,const RectList &bounds) override {
+    if(bounds.empty())return;size_t index=std::min<size_t>(range.to,bounds.size()-1);const auto &rect=bounds[index];event("ime-caret",std::to_string(rect.x)+","+std::to_string(rect.y)+","+std::to_string(rect.width)+","+std::to_string(rect.height));
+  }
   void OnPaint(CefRefPtr<CefBrowser>,PaintElementType type,const RectList&,const void *buffer,int w,int h) override {
     if(closing || w<=0 || h<=0)return;
     const auto *input=static_cast<const uint8_t*>(buffer);
     if(type==PET_VIEW){pixel_width=w;pixel_height=h;view_pixels.assign(input,input+static_cast<size_t>(w)*h*4);}
     else {popup_width=w;popup_height=h;popup_pixels.assign(input,input+static_cast<size_t>(w)*h*4);}
     if(view_pixels.empty())return;
-    auto composed=view_pixels;
+    std::vector<uint8_t> composed;const uint8_t *output=view_pixels.data();
     if(popup_visible && !popup_pixels.empty()){
+      composed=view_pixels;output=composed.data();
       int x=static_cast<int>(popup_rect.x*scale),y=static_cast<int>(popup_rect.y*scale);
       for(int py=0;py<popup_height;py++)for(int px=0;px<popup_width;px++){
         int tx=x+px,ty=y+py;if(tx<0 || ty<0 || tx>=pixel_width || ty>=pixel_height)continue;
@@ -181,7 +305,7 @@ class Client : public CefClient, public CefLifeSpanHandler, public CefRenderHand
     {
       std::lock_guard lock(frame_mutex);
       if(pending_frame)g_bytes_unref(pending_frame);
-      pending_frame=g_bytes_new(composed.data(),composed.size());pending_width=pixel_width;pending_height=pixel_height;
+      pending_frame=g_bytes_new(output,view_pixels.size());pending_width=pixel_width;pending_height=pixel_height;
       if(frame_queued)return;frame_queued=true;
     }
     CefRefPtr<Client> keep(this);
@@ -194,36 +318,83 @@ class Client : public CefClient, public CefLifeSpanHandler, public CefRenderHand
     });
   }
   void OnTitleChange(CefRefPtr<CefBrowser>,const CefString &s) override { event("title",s.ToString()); }
+  void OnFaviconURLChange(CefRefPtr<CefBrowser> b,const std::vector<CefString>& urls) override {if(!urls.empty())b->GetHost()->DownloadImage(urls.front(),true,64,false,image_callback(this,"favicon"));}
   void OnFullscreenModeChange(CefRefPtr<CefBrowser>,bool full) override {event("fullscreen",full?"1":"0");}
   bool OnCursorChange(CefRefPtr<CefBrowser>,CefCursorHandle,cef_cursor_type_t type,const CefCursorInfo&) override {
     event("cursor",type==CT_HAND?"pointer":type==CT_IBEAM?"text":type==CT_WAIT?"wait":type==CT_CROSS?"crosshair":"default");return true;
   }
-  void OnAddressChange(CefRefPtr<CefBrowser>,CefRefPtr<CefFrame> f,const CefString &s) override { if(f->IsMain()) event("url",s.ToString()); }
+  void OnAddressChange(CefRefPtr<CefBrowser>,CefRefPtr<CefFrame> f,const CefString &s) override { if(f->IsMain()){credential_context=0;credential_origin.clear();event("url",s.ToString());} }
+  void OnLoadEnd(CefRefPtr<CefBrowser> browser,CefRefPtr<CefFrame> frame,int status) override {
+    if(!frame->IsMain())return;
+    auto entry=browser->GetHost()->GetVisibleNavigationEntry();auto ssl=entry?entry->GetSSLStatus():nullptr;
+    std::string description="Connection is not encrypted";
+    if(ssl && ssl->IsSecureConnection()){
+      description=ssl->GetCertStatus()==CERT_STATUS_NONE && ssl->GetContentStatus()==SSL_CONTENT_NORMAL_CONTENT?"Encrypted TLS connection":"TLS connection has certificate or mixed-content warnings";
+      description+="\nCertificate status: "+std::to_string(ssl->GetCertStatus())+"\nContent status: "+std::to_string(ssl->GetContentStatus());
+      auto cert=ssl->GetX509Certificate();if(cert)description+="\nSubject: "+cert->GetSubject()->GetDisplayName().ToString()+"\nIssuer: "+cert->GetIssuer()->GetDisplayName().ToString();
+    }
+    event("security",description);
+    if(private_key.empty() && ssl && ssl->IsSecureConnection() && ssl->GetCertStatus()==CERT_STATUS_NONE && ssl->GetContentStatus()==SSL_CONTENT_NORMAL_CONTENT){credential_status=status;credential_origin=origin(frame->GetURL());protocol("Page.getFrameTree",nullptr,"credential-frame");}
+  }
   bool OnTooltip(CefRefPtr<CefBrowser>,CefString &s) override { event("tooltip",s.ToString()); return true; }
   void OnLoadingStateChange(CefRefPtr<CefBrowser>,bool loading,bool back,bool forward) override { event("loading",loading?"1":"0"); event("back",back?"1":"0"); event("forward",forward?"1":"0"); }
   void OnLoadError(CefRefPtr<CefBrowser>,CefRefPtr<CefFrame> f,ErrorCode code,const CefString &text,const CefString&) override { if(f->IsMain() && code!=ERR_ABORTED) event("error",text.ToString()); }
   void OnRenderProcessTerminated(CefRefPtr<CefBrowser>,TerminationStatus,int,const CefString &s) override { event("crashed",s.ToString()); }
   void OnBeforeContextMenu(CefRefPtr<CefBrowser>,CefRefPtr<CefFrame>,CefRefPtr<CefContextMenuParams> p,CefRefPtr<CefMenuModel> model) override {
-    model->Clear(); event("context",p->GetLinkUrl().ToString());
+    model->Clear();auto descriptor=CefDictionaryValue::Create();descriptor->SetString("link",p->GetLinkUrl());descriptor->SetString("source",p->GetSourceUrl());descriptor->SetString("selection",p->GetSelectionText());descriptor->SetBool("editable",p->IsEditable());descriptor->SetInt("editFlags",p->GetEditStateFlags());descriptor->SetInt("media",p->GetMediaType());descriptor->SetInt("x",p->GetXCoord());descriptor->SetInt("y",p->GetYCoord());auto value=CefValue::Create();value->SetDictionary(descriptor);event("context",CefWriteJSON(value,JSON_WRITER_DEFAULT).ToString());
   }
   bool OnJSDialog(CefRefPtr<CefBrowser>,const CefString &origin,JSDialogType type,const CefString &message,const CefString &initial,CefRefPtr<CefJSDialogCallback> cb,bool&) override {
-    request(type==JSDIALOGTYPE_PROMPT?"prompt":type==JSDIALOGTYPE_ALERT?"alert":"confirm",origin.ToString(),message.ToString(),[cb](bool yes,std::string text){cb->Continue(yes,text);}); return true;
+    std::string body=message.ToString();if(type==JSDIALOGTYPE_PROMPT){auto data=CefDictionaryValue::Create();data->SetString("message",message);data->SetString("default",initial);auto value=CefValue::Create();value->SetDictionary(data);body=CefWriteJSON(value,JSON_WRITER_DEFAULT).ToString();}
+    request(type==JSDIALOGTYPE_PROMPT?"prompt":type==JSDIALOGTYPE_ALERT?"alert":"confirm",origin.ToString(),body,[cb](bool yes,std::string text){cb->Continue(yes,text);}); return true;
   }
   bool OnBeforeUnloadDialog(CefRefPtr<CefBrowser>,const CefString &message,bool,CefRefPtr<CefJSDialogCallback> cb) override {
-    request("confirm","Leave page?",message.ToString(),[cb](bool yes,std::string text){cb->Continue(yes,text);}); return true;
+    CefRefPtr<Client> keep(this);request("confirm","Leave page?",message.ToString(),[keep,cb](bool yes,std::string text){if(!yes && keep->close_requested){keep->close_requested=false;keep->event("close-cancelled","");}cb->Continue(yes,text);}); return true;
   }
-  bool OnFileDialog(CefRefPtr<CefBrowser>,FileDialogMode mode,const CefString &title,const CefString&,const std::vector<CefString>&,const std::vector<CefString>&,const std::vector<CefString>&,CefRefPtr<CefFileDialogCallback> cb) override {
-    request("file",title.ToString(),std::to_string(mode),[cb](bool yes,std::string path){if(yes) cb->Continue({path}); else cb->Cancel();}); return true;
+  bool OnFileDialog(CefRefPtr<CefBrowser>,FileDialogMode mode,const CefString &title,const CefString &initial,const std::vector<CefString>& filters,const std::vector<CefString>&,const std::vector<CefString>&,CefRefPtr<CefFileDialogCallback> cb) override {
+    auto descriptor=CefDictionaryValue::Create();descriptor->SetInt("mode",mode);descriptor->SetString("initial",initial);
+    auto list=CefListValue::Create();for(size_t i=0;i<filters.size();i++)list->SetString(i,filters[i]);descriptor->SetList("filters",list);auto value=CefValue::Create();value->SetDictionary(descriptor);
+    request("file",title.ToString(),CefWriteJSON(value,JSON_WRITER_DEFAULT).ToString(),[cb](bool yes,std::string text){
+      auto value=CefParseJSON(text,JSON_PARSER_RFC);if(!yes || !value || value->GetType()!=VTYPE_LIST){cb->Cancel();return;}
+      auto list=value->GetList();std::vector<CefString> paths;for(size_t i=0;i<list->GetSize();i++)if(list->GetType(i)==VTYPE_STRING)paths.push_back(list->GetString(i));
+      if(paths.empty())cb->Cancel();else cb->Continue(paths);
+    });return true;
+  }
+  bool GetAuthCredentials(CefRefPtr<CefBrowser>,const CefString &origin,bool,const CefString&,int,const CefString &realm,const CefString&,CefRefPtr<CefAuthCallback> callback) override {
+    CefRefPtr<Client> keep(this);std::string site=origin.ToString(),message=realm.ToString();
+    ui([keep,site,message,callback]{keep->request("http-auth",site,message,[callback](bool yes,std::string text){
+      auto data=CefParseJSON(text,JSON_PARSER_RFC);if(!yes || !data || data->GetType()!=VTYPE_DICTIONARY){callback->Cancel();return;}
+      auto fields=data->GetDictionary();callback->Continue(fields->GetString("username"),fields->GetString("password"));
+    });});return true;
+  }
+  void OnResetDialogState(CefRefPtr<CefBrowser>) override {
+    std::vector<int> tokens;for(auto &[id,kind]:reply_kinds)if(kind=="alert" || kind=="confirm" || kind=="prompt")tokens.push_back(id);
+    for(auto id:tokens){reply(id,false,"");event("request-dismissed",std::to_string(id));}
   }
   bool OnBeforeDownload(CefRefPtr<CefBrowser>,CefRefPtr<CefDownloadItem> item,const CefString &name,CefRefPtr<CefBeforeDownloadCallback> cb) override {
     request("download",item->GetURL().ToString(),name.ToString(),[cb](bool yes,std::string path){if(yes) cb->Continue(path,false);}); return true;
   }
   void OnDownloadUpdated(CefRefPtr<CefBrowser>,CefRefPtr<CefDownloadItem> d,CefRefPtr<CefDownloadItemCallback> callback) override {
     if(d->IsInProgress())downloads[d->GetId()]=callback;else downloads.erase(d->GetId());
-    event("download",std::to_string(d->GetId())+"\t"+std::to_string(d->GetPercentComplete())+"\t"+(d->IsComplete()?"complete":d->IsCanceled()?"cancelled":"active")+"\t"+d->GetFullPath().ToString());
+    auto item=CefDictionaryValue::Create();item->SetInt("id",d->GetId());item->SetString("source",d->GetURL());item->SetString("path",d->GetFullPath());
+    item->SetString("status",d->IsComplete()?"complete":d->IsCanceled()?"cancelled":d->IsInterrupted()?"failed":d->IsPaused()?"paused":"active");
+    item->SetDouble("received",d->GetReceivedBytes());item->SetDouble("total",d->GetTotalBytes());item->SetDouble("speed",d->GetCurrentSpeed());item->SetString("error",d->IsInterrupted()?std::to_string(d->GetInterruptReason()):"");auto value=CefValue::Create();value->SetDictionary(item);event("download",CefWriteJSON(value,JSON_WRITER_DEFAULT).ToString());
   }
-  bool OnShowPermissionPrompt(CefRefPtr<CefBrowser>,uint64_t,const CefString &origin,uint32_t permissions,CefRefPtr<CefPermissionPromptCallback> cb) override {
-    request("permission",origin.ToString(),"Requested permissions: "+std::to_string(permissions),[cb](bool yes,std::string){cb->Continue(yes?CEF_PERMISSION_RESULT_ACCEPT:CEF_PERMISSION_RESULT_DENY);}); return true;
+  bool OnShowPermissionPrompt(CefRefPtr<CefBrowser>,uint64_t prompt_id,const CefString &origin,uint32_t permissions,CefRefPtr<CefPermissionPromptCallback> cb) override {
+    std::vector<std::pair<uint32_t,std::string>> supported={{CEF_PERMISSION_TYPE_CAMERA_STREAM,"camera"},{CEF_PERMISSION_TYPE_MIC_STREAM,"microphone"},{CEF_PERMISSION_TYPE_GEOLOCATION,"location"},{CEF_PERMISSION_TYPE_NOTIFICATIONS,"notifications"},{CEF_PERMISSION_TYPE_CLIPBOARD,"clipboard"},{CEF_PERMISSION_TYPE_MULTIPLE_DOWNLOADS,"multiple downloads"},{CEF_PERMISSION_TYPE_POINTER_LOCK,"pointer lock"},{CEF_PERMISSION_TYPE_KEYBOARD_LOCK,"keyboard lock"},{CEF_PERMISSION_TYPE_STORAGE_ACCESS,"storage access"},{CEF_PERMISSION_TYPE_TOP_LEVEL_STORAGE_ACCESS,"storage access"},{CEF_PERMISSION_TYPE_LOCAL_FONTS,"local fonts"}};
+    uint32_t known=0;std::string names;for(auto &[mask,name]:supported)if(permissions&mask){known|=mask;if(!names.empty())names+=",";names+=name;}
+    if((permissions&~known)!=0 || names.empty()){cb->Continue(CEF_PERMISSION_RESULT_DENY);return true;}
+    std::string site=origin;permission_prompts[prompt_id]=request("permission:"+names,site,"This website wants access to "+names,[this,cb,site](bool yes,std::string choice){if(yes && choice=="once")temporary_permission_origins.insert(site);cb->Continue(yes?CEF_PERMISSION_RESULT_ACCEPT:choice=="persistent"?CEF_PERMISSION_RESULT_DENY:CEF_PERMISSION_RESULT_DISMISS);});return true;
+  }
+  void OnDismissPermissionPrompt(CefRefPtr<CefBrowser>,uint64_t prompt_id,cef_permission_request_result_t) override {
+    auto it=permission_prompts.find(prompt_id);if(it==permission_prompts.end())return;
+    int id=it->second;permission_prompts.erase(it);replies.erase(id);reply_kinds.erase(id);event("request-dismissed",std::to_string(id));
+  }
+  bool OnRequestMediaAccessPermission(CefRefPtr<CefBrowser>,CefRefPtr<CefFrame>,const CefString &origin,uint32_t mask,CefRefPtr<CefMediaAccessCallback> callback) override {
+    uint32_t devices=CEF_MEDIA_PERMISSION_DEVICE_AUDIO_CAPTURE|CEF_MEDIA_PERMISSION_DEVICE_VIDEO_CAPTURE;
+    if(mask&~devices){callback->Cancel();return true;}std::string kinds;
+    if(mask&CEF_MEDIA_PERMISSION_DEVICE_AUDIO_CAPTURE)kinds="microphone";
+    if(mask&CEF_MEDIA_PERMISSION_DEVICE_VIDEO_CAPTURE){if(!kinds.empty())kinds+=",";kinds+="camera";}
+    request("permission:"+kinds,origin.ToString(),"This website wants to use your "+kinds,[callback,mask](bool yes,std::string){if(yes)callback->Continue(mask);else callback->Cancel();});return true;
   }
  private:
   IMPLEMENT_REFCOUNTING(Client);
@@ -239,6 +410,25 @@ class Cookies : public CefCookieVisitor {
   }
  private: IMPLEMENT_REFCOUNTING(Cookies);
 };
+class CookieReady : public CefCompletionCallback {
+ public:
+  CefRefPtr<CefRequestContext> context;std::function<void(CefRefPtr<CefCookieManager>)> action;
+  CookieReady(CefRefPtr<CefRequestContext> context,std::function<void(CefRefPtr<CefCookieManager>)> action):context(context),action(std::move(action)){}
+  void OnComplete() override {action(context->GetCookieManager(nullptr));}
+ private: IMPLEMENT_REFCOUNTING(CookieReady);
+};
+void cookies_ready(CefRefPtr<Client> client,std::function<void(CefRefPtr<CefCookieManager>)> action){if(client->context)client->context->GetCookieManager(new CookieReady(client->context,std::move(action)));}
+class SiteCookies : public CefCookieVisitor {
+ public:
+  CefRefPtr<Client> client;std::string host;int removed=0;
+  SiteCookies(CefRefPtr<Client> client,std::string host):client(client),host(std::move(host)){}
+  ~SiteCookies() override {client->event("cookies-cleared",std::to_string(removed));}
+  bool Visit(const CefCookie &cookie,int,int,bool &remove) override {
+    std::string domain=CefString(&cookie.domain).ToString();bool shared=domain.starts_with('.');if(shared)domain.erase(0,1);
+    remove=g_ascii_strcasecmp(host.c_str(),domain.c_str())==0 || (shared && host.size()>domain.size() && host.ends_with("."+domain));if(remove)++removed;return true;
+  }
+ private: IMPLEMENT_REFCOUNTING(SiteCookies);
+};
 class CookieSet : public CefSetCookieCallback {
  public: CefRefPtr<Client> client; explicit CookieSet(CefRefPtr<Client> c):client(c) {}
   void OnComplete(bool ok) override { client->event("cookie-set",ok?"1":"0"); }
@@ -249,6 +439,17 @@ class Source : public CefStringVisitor {
   void Visit(const CefString &html) override {auto text=html.ToString();if(text.size()>4*1024*1024)text.clear();client->event("source",text);}
  private: IMPLEMENT_REFCOUNTING(Source);
 };
+class Image : public CefDownloadImageCallback {
+ public:CefRefPtr<Client> client;std::string tag;Image(CefRefPtr<Client> c,std::string tag):client(c),tag(std::move(tag)){}
+  void OnDownloadImageFinished(const CefString&,int status,CefRefPtr<CefImage> image) override {
+    std::string encoded;
+    if(status==200 && image && !image->IsEmpty() && image->GetWidth()<=512 && image->GetHeight()<=512){
+      int width,height;auto png=image->GetAsPNG(1,true,width,height);if(png && png->GetSize()<=2*1024*1024){std::vector<uint8_t> bytes(png->GetSize());png->GetData(bytes.data(),bytes.size(),0);gchar *data=g_base64_encode(bytes.data(),bytes.size());encoded=data;g_free(data);}
+    }client->event("image:"+tag,encoded);
+  }
+ private:IMPLEMENT_REFCOUNTING(Image);
+};
+CefRefPtr<CefDownloadImageCallback> image_callback(CefRefPtr<Client> client,std::string tag){return new Image(client,std::move(tag));}
 class Manifest : public CefURLRequestClient {
  public: CefRefPtr<Client> client;std::string body;bool oversized=false;
   explicit Manifest(CefRefPtr<Client> c):client(c){}
@@ -264,13 +465,22 @@ class Deleted : public CefDeleteCookiesCallback {
   void OnComplete(int n) override { client->event("cookies-cleared",std::to_string(n)); }
  private: IMPLEMENT_REFCOUNTING(Deleted);
 };
-class App : public CefApp, public CefBrowserProcessHandler {
+class App : public CefApp, public CefBrowserProcessHandler, public CefResourceBundleHandler {
  public:
+  std::string display_name=g_getenv("MAJORIS_CEF_DISPLAY_NAME")?g_getenv("MAJORIS_CEF_DISPLAY_NAME"):"Majoris Browser";
+  CefRefPtr<CefResourceBundleHandler> GetResourceBundleHandler() override {return this;}
+  bool GetLocalizedString(int id,CefString &value) override {if(id!=IDS_PRODUCT_NAME && id!=IDS_SHORT_PRODUCT_NAME)return false;value=display_name;return true;}
+  bool GetDataResource(int,void*&,size_t&) override {return false;}
+  bool GetDataResourceForScale(int,ScaleFactor,void*&,size_t&) override {return false;}
   CefRefPtr<CefBrowserProcessHandler> GetBrowserProcessHandler() override {return this;}
   void OnContextInitialized() override {g_message("CEF: browser context ready");}
   void OnBeforeCommandLineProcessing(const CefString&,CefRefPtr<CefCommandLine> command) override {
     command->AppendSwitch("no-first-run");command->AppendSwitch("no-default-browser-check");
     if(g_getenv("MAJORIS_CEF_TEST_HEADLESS")){command->AppendSwitchWithValue("ozone-platform","headless");command->AppendSwitch("disable-gpu");}
+    // Disposable integration fixtures must not open a desktop keyring prompt.
+    // Credential tests still exercise libsecret against their own unlocked service.
+    if(g_getenv("MAJORIS_CEF_TEST_BASIC_STORE"))command->AppendSwitchWithValue("password-store","basic");
+    if(g_getenv("MAJORIS_CEF_DISABLE_GPU"))command->AppendSwitch("disable-gpu");
   }
  private: IMPLEMENT_REFCOUNTING(App);
 };
@@ -285,6 +495,7 @@ static void mc_view_class_init(McViewClass *klass) {
   signals[0]=g_signal_new("frame",G_TYPE_FROM_CLASS(klass),G_SIGNAL_RUN_LAST,0,nullptr,nullptr,nullptr,G_TYPE_NONE,3,G_TYPE_BYTES,G_TYPE_INT,G_TYPE_INT);
   signals[1]=g_signal_new("event",G_TYPE_FROM_CLASS(klass),G_SIGNAL_RUN_LAST,0,nullptr,nullptr,nullptr,G_TYPE_NONE,2,G_TYPE_STRING,G_TYPE_STRING);
   signals[2]=g_signal_new("request",G_TYPE_FROM_CLASS(klass),G_SIGNAL_RUN_LAST,0,nullptr,nullptr,nullptr,G_TYPE_NONE,4,G_TYPE_INT,G_TYPE_STRING,G_TYPE_STRING,G_TYPE_STRING);
+  signals[3]=g_signal_new("popup",G_TYPE_FROM_CLASS(klass),G_SIGNAL_RUN_LAST,0,nullptr,nullptr,nullptr,G_TYPE_NONE,4,MC_TYPE_VIEW,G_TYPE_BOOLEAN,G_TYPE_STRING,G_TYPE_BOOLEAN);
 }
 static void mc_view_init(McView *v) { v->state=new State; }
 gboolean mc_runtime_initialize(const char *root,const char *helper,const char *resources,GError **error) {
@@ -312,7 +523,7 @@ gboolean mc_runtime_initialize(const char *root,const char *helper,const char *r
   CefString(&settings.browser_subprocess_path)=helper;
   CefString(&settings.resources_dir_path)=resources;
   CefString(&settings.locales_dir_path)=std::string(resources)+"/locales";
-  CefString(&settings.user_agent)="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/" + std::to_string(CHROME_VERSION_MAJOR)+"."+std::to_string(CHROME_VERSION_MINOR)+"."+std::to_string(CHROME_VERSION_BUILD)+"."+std::to_string(CHROME_VERSION_PATCH)+" Safari/537.36 Majoris/" MAJORIS_VERSION;
+  CefString(&settings.user_agent)=user_agent();
   g_message("CEF: starting engine");
   initialized=CefInitialize(args,settings,new App,nullptr);
   g_message("CEF: initialization %s",initialized?"complete":"failed");
@@ -324,11 +535,15 @@ void mc_runtime_shutdown(void) {
   while(true){ {std::lock_guard lock(lifecycle_mutex);if(live==0)break;} g_main_context_iteration(nullptr,true); }
   CefShutdown(); initialized=false;majoris_profile_release(profile_lock);profile_lock=-1;
 }
-const char *mc_runtime_version(void) { return CEF_VERSION; }
+const char *mc_runtime_version(void) {static const std::string version=std::to_string(cef_version_info(0))+"."+std::to_string(cef_version_info(1))+"."+std::to_string(cef_version_info(2))+" / Chromium "+chrome_version();return version.c_str();}
 McView *mc_view_new(const char *profile,gboolean ephemeral,const char *url,const char *scope) {
+  return mc_view_new_with_permissions(profile,ephemeral,url,scope,"[]");
+}
+McView *mc_view_new_with_permissions(const char *profile,gboolean ephemeral,const char *url,const char *scope,const char *permissions) {
   auto *v=MC_VIEW(g_object_new(MC_TYPE_VIEW,nullptr));
   if(!ephemeral && g_mkdir_with_parents(profile,0700)!=0){g_object_unref(v);return nullptr;}
   CefRefPtr<Client> c=new Client(v,scope); v->state->client=c;
+  c->set_permissions(permissions);
   std::string path=profile, target=url;
   {std::lock_guard lock(lifecycle_mutex); ++live;}
   ui([c,path,target,ephemeral] {
@@ -347,9 +562,11 @@ McView *mc_view_new(const char *profile,gboolean ephemeral,const char *url,const
   });
   return v;
 }
+void mc_view_set_permissions(McView *v,const char *permissions){auto c=v->state->client;std::string text=permissions;ui([c,text]{if(!c->closing){c->set_permissions(text);c->event("permissions-applied","");}});}
 void mc_view_close(McView *v) { auto c=v->state->client; if(c) ui([c]{c->closing=true; if(c->browser) c->browser->GetHost()->CloseBrowser(true);}); }
+void mc_view_request_close(McView *v) {auto c=v->state->client;if(c)ui([c]{if(c->closing || c->close_requested)return;c->close_requested=true;if(c->browser)c->browser->GetHost()->CloseBrowser(false);});}
 void mc_view_load(McView *v,const char *url) { auto c=v->state->client; std::string s=url; ui([c,s]{if(c->browser)c->browser->GetMainFrame()->LoadURL(s);}); }
-void mc_view_resize(McView *v,int w,int h,double s) { auto c=v->state->client; ui([c,w,h,s]{c->width=std::max(1,w); c->height=std::max(1,h); c->scale=s; if(c->browser){c->browser->GetHost()->NotifyScreenInfoChanged(); c->browser->GetHost()->WasResized();}}); }
+void mc_view_resize(McView *v,int w,int h,double s) { auto c=v->state->client; ui([c,w,h,s]{c->width=std::clamp(w,1,16384); c->height=std::clamp(h,1,16384); c->scale=std::isfinite(s)?std::clamp(s,0.5,4.0):1; if(c->browser){c->browser->GetHost()->NotifyScreenInfoChanged(); c->browser->GetHost()->WasResized();}}); }
 void mc_view_focus(McView *v,gboolean focus) { auto c=v->state->client; ui([c,focus]{if(c->browser)c->browser->GetHost()->SetFocus(focus);}); }
 void mc_view_reply(McView *v,int token,gboolean yes,const char *text) {auto c=v->state->client; std::string s=text; ui([c,token,yes,s]{c->reply(token,yes,s);});}
 void mc_view_pointer(McView *v,int kind,int x,int y,int button,int modifiers,int dx,int dy) {
@@ -372,12 +589,29 @@ void mc_view_command(McView *v,const char *command) {
   ui([c,s]{if(!c->browser)return; auto b=c->browser;auto h=b->GetHost();auto f=b->GetMainFrame();
     if(s=="back")b->GoBack(); else if(s=="forward")b->GoForward(); else if(s=="reload")b->Reload(); else if(s=="hard-reload")b->ReloadIgnoreCache(); else if(s=="stop")b->StopLoad();
     else if(s=="zoom-in")h->SetZoomLevel(h->GetZoomLevel()+0.5);else if(s=="zoom-out")h->SetZoomLevel(h->GetZoomLevel()-0.5);else if(s=="zoom-reset")h->SetZoomLevel(0);
-    else if(s=="print")h->Print();else if(s=="copy")f->Copy();else if(s=="cut")f->Cut();else if(s=="paste")f->Paste();else if(s=="select-all")f->SelectAll();else if(s=="source")f->ViewSource();
-    else if(s=="mute")h->SetAudioMuted(!h->IsAudioMuted());
+    else if(s=="print")h->Print();
+    else if(s=="save-pdf"){auto args=CefDictionaryValue::Create();args->SetBool("printBackground",true);c->protocol("Page.printToPDF",args,s);}
+    else if(s=="save-page"){auto args=CefDictionaryValue::Create();args->SetString("format","mhtml");c->protocol("Page.captureSnapshot",args,s);}
+    else if(s=="picture-in-picture"){auto args=CefDictionaryValue::Create();args->SetBool("userGesture",true);args->SetBool("awaitPromise",true);args->SetString("expression","(async()=>{if(document.pictureInPictureElement){await document.exitPictureInPicture();return;}const video=[...document.querySelectorAll('video')].find(v=>!v.paused&&v.readyState>=2&&!v.disablePictureInPicture);if(!video||!document.pictureInPictureEnabled)throw Error('Unavailable');await video.requestPictureInPicture();})()");c->protocol("Runtime.evaluate",args,s);}
+    else if(s=="auth-cancel"){c->auth_origin.clear();c->auth_deadline=0;}
+    else if(s.starts_with("proxy:")){
+      std::string address=s.substr(6);auto settings=CefDictionaryValue::Create();settings->SetString("mode",address.empty()?"system":"fixed_servers");if(!address.empty())settings->SetString("server",address);auto value=CefValue::Create();value->SetDictionary(settings);CefString error;if(c->context->SetPreference("proxy",value,error))c->event("proxy-applied","");else c->event("operation-error","Proxy setting: "+error.ToString());
+    }
+    else if(s=="copy")b->GetFocusedFrame()->Copy();else if(s=="cut")b->GetFocusedFrame()->Cut();else if(s=="paste")b->GetFocusedFrame()->Paste();else if(s=="select-all")b->GetFocusedFrame()->SelectAll();else if(s=="source")f->ViewSource();
+    else if(s=="mute"){h->SetAudioMuted(!h->IsAudioMuted());c->event("muted",h->IsAudioMuted()?"1":"0");}
+    else if(s.starts_with("zoom:"))h->SetZoomLevel(g_ascii_strtod(s.c_str()+5,nullptr));
+    else if(s.starts_with("privacy:")){
+      auto fields=g_strsplit(s.c_str(),":",3);bool cookie=fields[1] && std::string(fields[1])=="1",https=fields[2] && std::string(fields[2])=="1";g_strfreev(fields);CefString error;
+      auto cookies=CefValue::Create();cookies->SetInt(cookie?1:0);auto upgrades=CefValue::Create();upgrades->SetBool(https);
+      bool ok=c->context->SetPreference("profile.cookie_controls_mode",cookies,error);if(!ok)c->event("operation-error","Third-party cookie setting: "+error.ToString());
+      bool upgraded=c->context->SetPreference("https_only_mode_enabled",upgrades,error);if(!upgraded)c->event("operation-error","HTTPS upgrade setting: "+error.ToString());
+      if(ok && upgraded)c->event("privacy-applied","");
+    }
     else if(s=="devtools"){CefWindowInfo wi;wi.runtime_style=CEF_RUNTIME_STYLE_ALLOY;CefBrowserSettings bs;h->ShowDevTools(wi,nullptr,bs,CefPoint());}
     else if(s.rfind("find:",0)==0)h->Find(s.substr(5),true,false,false);
     else if(s=="find-stop")h->StopFinding(true);
     else if(s=="source-metadata")f->GetSource(new Source(c));
+    else if(s.starts_with("download:"))h->StartDownload(s.substr(9));
     else if(s.rfind("download-",0)==0){auto colon=s.find(':');if(colon!=std::string::npos){auto id=static_cast<uint32_t>(g_ascii_strtoull(s.c_str()+colon+1,nullptr,10));auto it=c->downloads.find(id);if(it!=c->downloads.end()){if(s.starts_with("download-cancel:"))it->second->Cancel();else if(s.starts_with("download-pause:"))it->second->Pause();else if(s.starts_with("download-resume:"))it->second->Resume();}}}
     else if(s=="tasks"){
       auto manager=CefTaskManager::GetTaskManager();CefTaskManager::TaskIdList ids;std::string data;
@@ -388,12 +622,36 @@ void mc_view_command(McView *v,const char *command) {
     }else if(s.rfind("kill-task:",0)==0){auto manager=CefTaskManager::GetTaskManager();if(manager)manager->KillTask(g_ascii_strtoll(s.c_str()+10,nullptr,10));}
   });
 }
-void mc_view_clear_cookies(McView *v) {auto c=v->state->client;ui([c]{if(c->context)c->context->GetCookieManager(nullptr)->DeleteCookies("","",new Deleted(c));});}
+void mc_view_clear_cookies(McView *v) {auto c=v->state->client;ui([c]{cookies_ready(c,[c](auto manager){if(!manager->DeleteCookies("","",new Deleted(c)))c->event("operation-error","clear-cookies");});});}
+void mc_view_clear_site_cookies(McView *v,const char *url){auto c=v->state->client;std::string target=url;ui([c,target]{
+  CefURLParts parts;if(!CefParseURL(target,parts))return;
+  std::string scheme=CefString(&parts.scheme);if(scheme!="https" && scheme!="http")return;
+  std::string host=CefString(&parts.host);cookies_ready(c,[c,host](auto manager){if(!manager->VisitAllCookies(new SiteCookies(c,host)))c->event("operation-error","clear-site-cookies");});
+});}
+void mc_view_clear_site_data(McView *v,const char *url){auto c=v->state->client;std::string target=url;ui([c,target]{
+  CefURLParts parts;if(!CefParseURL(target,parts))return;
+  std::string scheme=CefString(&parts.scheme);if(scheme!="https" && scheme!="http")return;
+  auto params=CefDictionaryValue::Create();params->SetString("origin",CefString(&parts.origin));
+  // Cookies are separately URL-scoped: never use CDP's browser-wide cookie clear.
+  params->SetString("storageTypes","appcache,file_systems,indexeddb,local_storage,shader_cache,websql,service_workers,cache_storage,storage_buckets");
+  c->protocol("Storage.clearDataForOrigin",params,"clear-site-data");
+  std::string host=CefString(&parts.host);cookies_ready(c,[c,host](auto manager){if(!manager->VisitAllCookies(new SiteCookies(c,host)))c->event("operation-error","clear-site-cookies");});
+});}
+void mc_view_ime(McView *v,const char *text,int selection,gboolean commit){auto c=v->state->client;std::string value=text;ui([c,value,selection,commit]{
+  if(!c->browser || c->closing)return;auto host=c->browser->GetHost();CefString utf16=value;
+  CefRange unspecified(UINT32_MAX,UINT32_MAX);
+  if(commit)host->ImeCommitText(utf16,unspecified,0);
+  else if(value.empty())host->ImeCancelComposition();
+  else {CefCompositionUnderline line;line.range=CefRange(0,utf16.length());line.color=0xff000000;line.background_color=0;line.thick=false;host->ImeSetComposition(utf16,{line},unspecified,CefRange(selection,selection));}
+});}
 void mc_view_set_cookie(McView *v,const char *url,const char *name,const char *value) {
   auto c=v->state->client;std::string u=url,n=name,s=value;
-  ui([c,u,n,s]{if(!c->context)return;CefCookie cookie;CefString(&cookie.name)=n;CefString(&cookie.value)=s;CefString(&cookie.path)="/";c->context->GetCookieManager(nullptr)->SetCookie(u,cookie,new CookieSet(c));});
+  ui([c,u,n,s]{cookies_ready(c,[c,u,n,s](auto manager){CefCookie cookie;CefString(&cookie.name)=n;CefString(&cookie.value)=s;CefString(&cookie.path)="/";if(!manager->SetCookie(u,cookie,new CookieSet(c)))c->event("operation-error","set-cookie");});});
 }
-void mc_view_get_cookies(McView *v,const char *url) {auto c=v->state->client;std::string u=url;ui([c,u]{if(c->context)c->context->GetCookieManager(nullptr)->VisitUrlCookies(u,true,new Cookies(c));});}
+void mc_view_set_cookie_details(McView *v,const char *url,const char *name,const char *value,const char *domain,const char *path,gboolean secure,gboolean http_only){
+  auto c=v->state->client;std::string u=url,n=name,s=value,d=domain,p=path;ui([c,u,n,s,d,p,secure,http_only]{cookies_ready(c,[c,u,n,s,d,p,secure,http_only](auto manager){CefCookie cookie;CefString(&cookie.name)=n;CefString(&cookie.value)=s;CefString(&cookie.domain)=d;CefString(&cookie.path)=p;cookie.secure=secure;cookie.httponly=http_only;if(!manager->SetCookie(u,cookie,new CookieSet(c)))c->event("operation-error","set-cookie");});});
+}
+void mc_view_get_cookies(McView *v,const char *url) {auto c=v->state->client;std::string u=url;ui([c,u]{cookies_ready(c,[c,u](auto manager){if(!manager->VisitUrlCookies(u,true,new Cookies(c)))c->event("operation-error","get-cookies");});});}
 void mc_view_allow_auth(McView *v,const char *url){auto c=v->state->client;std::string target=url;ui([c,target]{if(c->scope.empty())return;c->auth_origin=Client::origin(target);c->auth_deadline=g_get_monotonic_time()+120*G_USEC_PER_SEC;});}
 void mc_view_autofill(McView *v,const char *origin,const char *username,const char *password){
   auto c=v->state->client;std::string site=origin,user=username,secret=password;
@@ -407,10 +665,24 @@ void mc_view_autofill(McView *v,const char *origin,const char *username,const ch
     frame->ExecuteJavaScript(script,frame->GetURL(),0);
   });
 }
+void mc_view_fill_address(McView *v,const char *origin,const char *fields){auto c=v->state->client;std::string site=origin,data=fields;ui([c,site,data]{
+  if(!c->browser || c->closing || data.size()>16384 || Client::origin(site).empty())return;auto frame=c->browser->GetMainFrame();if(Client::origin(frame->GetURL())!=Client::origin(site))return;
+  auto parsed=CefParseJSON(data,JSON_PARSER_RFC);if(!parsed || parsed->GetType()!=VTYPE_DICTIONARY)return;auto safe=CefDictionaryValue::Create();auto input=parsed->GetDictionary();
+  for(auto key:{"name","organization","street-address","address-line1","address-line2","address-level2","address-level1","postal-code","country","tel","email"})if(input->GetType(key)==VTYPE_STRING)safe->SetString(key,input->GetString(key));auto value=CefValue::Create();value->SetDictionary(safe);
+  auto script="(()=>{const fields="+CefWriteJSON(value,JSON_WRITER_DEFAULT).ToString()+";for(const e of document.querySelectorAll('input[autocomplete],textarea[autocomplete]')){const key=e.autocomplete.split(/\\s+/).pop();if(e.type==='password'||e.disabled||e.readOnly||!e.getClientRects().length||!(key in fields))continue;e.value=fields[key];e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));}})();";frame->ExecuteJavaScript(script,frame->GetURL(),0);
+});}
 void mc_view_fetch_manifest(McView *v,const char *url){auto c=v->state->client;std::string target=url;ui([c,target]{
   if(!c->context)return;
   GError *error=nullptr;GUri *uri=g_uri_parse(target.c_str(),G_URI_FLAGS_NONE,&error);g_clear_error(&error);
   bool valid=uri && g_uri_get_host(uri) && !g_uri_get_userinfo(uri) && (g_strcmp0(g_uri_get_scheme(uri),"https")==0 || g_strcmp0(g_uri_get_scheme(uri),"http")==0);if(uri)g_uri_unref(uri);
   if(!valid){c->event("manifest","");return;}
   auto request=CefRequest::Create();request->SetURL(target);request->SetMethod("GET");c->manifest_request=CefURLRequest::Create(request,new Manifest(c),c->context);
+});}
+void mc_view_fetch_image(McView *v,const char *url,const char *tag){auto c=v->state->client;std::string target=url,label=tag;ui([c,target,label]{CefURLParts parts;if(!c->browser || !CefParseURL(target,parts))return;std::string scheme=CefString(&parts.scheme);if(scheme=="http" || scheme=="https")c->browser->GetHost()->DownloadImage(target,false,256,false,image_callback(c,label));});}
+void mc_view_evaluate(McView *v,const char *expression){auto c=v->state->client;std::string script=expression;ui([c,script]{auto params=CefDictionaryValue::Create();params->SetString("expression",script);params->SetBool("returnByValue",true);params->SetBool("awaitPromise",true);c->protocol("Runtime.evaluate",params,"evaluate");});}
+void mc_view_drop(McView *v,const char *text,const char *files,int x,int y){auto c=v->state->client;std::string content=text,paths=files;ui([c,content,paths,x,y]{
+  if(!c->browser || c->closing || content.size()>8*1024*1024 || paths.size()>1024*1024)return;
+  auto drag=CefDragData::Create();if(!content.empty())drag->SetFragmentText(content);
+  auto list=CefParseJSON(paths,JSON_PARSER_RFC);if(list && list->GetType()==VTYPE_LIST){auto items=list->GetList();for(size_t i=0;i<items->GetSize() && i<100;i++){auto path=items->GetString(i).ToString();if(g_path_is_absolute(path.c_str()) && g_file_test(path.c_str(),G_FILE_TEST_IS_REGULAR))drag->AddFile(path,"");}}
+  CefMouseEvent event;event.x=x;event.y=y;auto host=c->browser->GetHost();host->DragTargetDragEnter(drag,event,DRAG_OPERATION_COPY);host->DragTargetDragOver(event,DRAG_OPERATION_COPY);host->DragTargetDrop(event);
 });}

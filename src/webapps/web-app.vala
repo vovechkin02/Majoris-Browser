@@ -7,6 +7,9 @@ namespace MajorisBrowser {
         public int64 installed_at;
         public string manifest_url="";
         public string icon_url="";
+        public string icon_path="";
+        public string theme_color="";
+        public string background_color="";
         public string display_mode="standalone";
         public string application_id { owned get { return "com.majoris.browser.WebApp." + id; } }
         public string desktop_name { owned get { return application_id + ".desktop"; } }
@@ -30,6 +33,9 @@ namespace MajorisBrowser {
             b.set_member_name ("installed_at"); b.add_int_value (installed_at);
             b.set_member_name("manifest_url");b.add_string_value(manifest_url);
             b.set_member_name("icon_url");b.add_string_value(icon_url);
+            b.set_member_name("icon_path");b.add_string_value(icon_path);
+            b.set_member_name("theme_color");b.add_string_value(theme_color);
+            b.set_member_name("background_color");b.add_string_value(background_color);
             b.set_member_name("display_mode");b.add_string_value(display_mode);
             b.end_object (); var g = new Json.Generator (); g.set_root (b.get_root ()); return g.to_data (null);
         }
@@ -44,6 +50,9 @@ namespace MajorisBrowser {
             app.installed_at = o.get_int_member ("installed_at");
             if(o.has_member("manifest_url"))app.manifest_url=o.get_string_member("manifest_url");
             if(o.has_member("icon_url"))app.icon_url=o.get_string_member("icon_url");
+            if(o.has_member("icon_path"))app.icon_path=o.get_string_member("icon_path");
+            if(o.has_member("theme_color"))app.theme_color=o.get_string_member("theme_color");
+            if(o.has_member("background_color"))app.background_color=o.get_string_member("background_color");
             if(o.has_member("display_mode"))app.display_mode=o.get_string_member("display_mode");
             return app;
         }
@@ -59,6 +68,24 @@ namespace MajorisBrowser {
             string scope=object.has_member("scope")?Uri.resolve_relative(manifest_url,object.get_string_member("scope"),UriFlags.NONE):Uri.resolve_relative(start,".",UriFlags.NONE);
             var result=new WebApp(name,start,scope);result.manifest_url=manifest_url;
             if(object.has_member("display"))result.display_mode=object.get_string_member("display");
+            foreach(string field in new string[]{"theme_color","background_color"})if(object.has_member(field) && object.get_member(field).get_value_type()==typeof(string)){
+                if(field=="theme_color")result.theme_color=object.get_string_member(field);else result.background_color=object.get_string_member(field);
+            }
+            if(object.has_member("icons") && object.get_member("icons").get_node_type()==Json.NodeType.ARRAY){
+                int best=0;
+                foreach(var node in object.get_array_member("icons").get_elements()){
+                    if(node.get_node_type()!=Json.NodeType.OBJECT)continue;var icon=node.get_object();
+                    if(!icon.has_member("src") || icon.get_member("src").get_value_type()!=typeof(string))continue;
+                    try{
+                        string url=Uri.resolve_relative(manifest_url,icon.get_string_member("src"),UriFlags.NONE);UrlResolver.web_uri(url);
+                        int size=128;
+                        if(icon.has_member("sizes") && icon.get_member("sizes").get_value_type()==typeof(string))foreach(string pair in icon.get_string_member("sizes").split(" ")){
+                            string[] sides=pair.split("x");if(sides.length==2){int parsed=int.parse(sides[0]);if(parsed>0 && parsed<=1024)size=parsed;}
+                        }
+                        if(size>=best){best=size;result.icon_url=url;}
+                    }catch(Error e){}
+                }
+            }
             return result;
         }
         public void install_desktop (string data_home) throws Error {
@@ -68,7 +95,7 @@ namespace MajorisBrowser {
             key.set_string ("Desktop Entry", "Type", "Application");
             key.set_string ("Desktop Entry", "Name", name);
             key.set_string ("Desktop Entry", "Exec", "majoris-browser --app=" + id);
-            key.set_string ("Desktop Entry", "Icon", "com.majoris.browser");
+            key.set_string ("Desktop Entry", "Icon", icon_path!=""?icon_path:"com.majoris.browser");
             key.set_string ("Desktop Entry", "StartupWMClass", application_id);
             key.set_string ("Desktop Entry", "Categories", "Network;WebBrowser;");
             key.set_boolean ("Desktop Entry", "Terminal", false);

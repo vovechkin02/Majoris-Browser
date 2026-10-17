@@ -18,12 +18,14 @@ int main (string[] args) {
     SourceFunc begin=()=>{ready++;if(ready==2){if(restore)normal.get_cookies("https://fixture.test/");else{normal.set_cookie("https://fixture.test/","normal","yes");app.set_cookie("https://fixture.test/","app","yes");}}return Source.REMOVE;};
     int set=0;
     normal.event.connect((kind,value)=>{
+        if(kind=="ready" || kind.has_prefix("cookie"))message("Normal context event: %s",kind);
         if(kind=="ready")begin();
         if(kind=="cookie-set"){assert(value=="1");set++;if(set==2)normal.clear_cookies();}
         if(kind=="cookies-cleared"){assert(value=="1");normal.get_cookies("https://fixture.test/");}
         if(kind=="cookies"){assert(value=="");phase=1;app.get_cookies("https://fixture.test/");}
     });
     app.event.connect((kind,value)=>{
+        if(kind=="ready" || kind.has_prefix("cookie"))message("Application context event: %s",kind);
         if(kind=="ready")begin();
         if(kind=="cookie-set"){assert(value=="1");set++;if(set==2)normal.clear_cookies();}
         if(kind=="cookies"){assert(phase==1);assert(value.contains("app=yes"));success=true;normal.close();app.close();}

@@ -1,5 +1,6 @@
 resources = gnome.compile_resources('majoris-browser-resources', 'resources.gresource.xml', c_name: 'majoris_browser')
 install_data('com.majoris.browser.desktop', install_dir: get_option('datadir') / 'applications')
+install_data('com.majoris.browser.policy',install_dir:get_option('datadir')/'polkit-1/actions')
 install_data('com.majoris.browser.metainfo.xml', install_dir: get_option('datadir') / 'metainfo')
 install_data('com.majoris.browser.gschema.xml', install_dir: get_option('datadir') / 'glib-2.0/schemas')
 install_data('icons/com.majoris.browser.svg', install_dir: get_option('datadir') / 'icons/hicolor/scalable/apps')
