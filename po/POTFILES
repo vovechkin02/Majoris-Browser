@@ -1,0 +1,6 @@
+src/application.vala
+src/browser-window.vala
+src/web-app-window.vala
+src/settings/preferences-window.vala
+src/ui/engine-dialogs.vala
+src/ui/task-manager.vala

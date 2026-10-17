@@ -1,0 +1,4 @@
+MAJORIS_CEF_1.0 {
+  global: mc_*;
+  local: *;
+};

@@ -1,0 +1,5 @@
+/build*/
+/.cef/
+__pycache__/
+*.pyc
+/data/gschemas.compiled

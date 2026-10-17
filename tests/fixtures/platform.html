@@ -1,0 +1,15 @@
+<!doctype html><meta charset="utf-8"><title>Majoris platform fixture</title>
+<link rel="manifest" href="/app.webmanifest">
+<h1>Local platform fixture</h1>
+<button onclick="alert('Native GTK alert')">Alert</button>
+<button onclick="document.querySelector('output').textContent=prompt('Prompt','value')">Prompt</button>
+<button onclick="window.open('/popup.html')">Popup</button>
+<a href="/popup.html" target="_blank">Target blank</a>
+<a href="data:text/plain,Majoris%20download" download="fixture.txt">Download</a>
+<input type="file"><input placeholder="IME and clipboard"><output></output>
+<script>
+document.cookie='fixture=normal; SameSite=Lax; path=/';
+localStorage.setItem('fixture','persistent');
+const request=indexedDB.open('fixture',1);
+request.onupgradeneeded=()=>request.result.createObjectStore('values');
+</script>

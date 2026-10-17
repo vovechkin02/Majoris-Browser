@@ -1,0 +1,13 @@
+Source: majoris-browser
+Section: web
+Priority: optional
+Maintainer: Majoris Developers <developers@majoris.org>
+Build-Depends: debhelper-compat (= 13), meson, ninja-build, valac, libgtk-4-dev (>= 4.12), libadwaita-1-dev (>= 1.5), libglib2.0-dev, libgee-0.8-dev, libjson-glib-dev, libsqlite3-dev, libsecret-1-dev, gettext, cmake, g++
+Standards-Version: 4.7.0
+Rules-Requires-Root: no
+
+Package: majoris-browser
+Architecture: amd64
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Native Majoris browser and isolated web application runtime
+ GTK4/libadwaita browser powered by CEF/Chromium.

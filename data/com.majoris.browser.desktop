@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Application
+Name=Browser
+Comment=Browse the web and run installed web applications
+Exec=majoris-browser %U
+Icon=com.majoris.browser
+Terminal=false
+StartupNotify=true
+Categories=Network;WebBrowser;GTK;
+MimeType=text/html;x-scheme-handler/http;x-scheme-handler/https;
+Actions=private;
+
+[Desktop Action private]
+Name=New Private Window
+Exec=majoris-browser --private

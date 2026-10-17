@@ -1,0 +1,9 @@
+* text=auto
+*.sh text eol=lf
+*.py text eol=lf
+*.vala text eol=lf
+*.vapi text eol=lf
+*.cpp text eol=lf
+*.h text eol=lf
+meson.build text eol=lf
+packaging/debian/rules text eol=lf

@@ -1,0 +1,6 @@
+#!/usr/bin/make -f
+%:
+	dh $@ --buildsystem=meson
+override_dh_auto_configure:
+	test -n "$(CEF_ROOT)"
+	dh_auto_configure -- -Dcef_root=$(CEF_ROOT)

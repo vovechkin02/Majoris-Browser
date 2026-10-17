@@ -1,0 +1,12 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: majoris-browser
+
+Files: *
+Copyright: 2026 Majoris contributors
+License: GPL-3+
+ See /usr/share/common-licenses/GPL-3.
+
+Files: data/com.majoris.browser.metainfo.xml
+Copyright: 2026 Majoris contributors
+License: CC0-1.0
+ Dedicated to the public domain under CC0 1.0.
