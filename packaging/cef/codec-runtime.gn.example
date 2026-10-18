@@ -1,0 +1,6 @@
+# Maintainer template only; never consumed by Meson/bootstrap.
+# Use ONLY after recording codec redistribution/patent authorisation.
+# Apply to the selected supported CEF branch using upstream's automated build.
+proprietary_codecs = true
+ffmpeg_branding = "Chrome"
+# Do not disable the Chromium sandbox or alter web-security settings.

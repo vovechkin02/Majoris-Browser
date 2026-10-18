@@ -4,6 +4,12 @@ namespace MajorisBrowser {
         public string name;
         public string start_url;
         public string scope;
+        public string scope_source="explicit";
+        public static string proposed_scope(string url) throws Error {
+            string path=WebAppNavigationPolicy.normalized_path(url);
+            if(!path.has_suffix("/")){int slash=path.index_of("/",1);path=slash>0?path.substring(0,slash+1):"/";}
+            return UrlResolver.origin(url)+path;
+        }
         public int64 installed_at;
         public string manifest_url="";
         public string icon_url="";
@@ -19,7 +25,8 @@ namespace MajorisBrowser {
             this.name = name.strip ();
             if (this.name == "") throw new BrowserError.INVALID_APP ("Application name is empty");
             this.start_url = url;
-            this.scope = scope ?? UrlResolver.origin (url) + "/";
+            this.scope = scope ?? proposed_scope(url);
+            if(scope==null)scope_source="inferred";
             if (new WebAppNavigationPolicy (this.scope).classify (url) != NavigationDecision.APP_SCOPE)
                 throw new BrowserError.INVALID_APP ("Start URL must be in application scope");
             installed_at = new DateTime.now_utc ().to_unix ();
@@ -30,6 +37,7 @@ namespace MajorisBrowser {
             b.set_member_name ("name"); b.add_string_value (name);
             b.set_member_name ("start_url"); b.add_string_value (start_url);
             b.set_member_name ("scope"); b.add_string_value (scope);
+            b.set_member_name("scope_source");b.add_string_value(scope_source);
             b.set_member_name ("installed_at"); b.add_int_value (installed_at);
             b.set_member_name("manifest_url");b.add_string_value(manifest_url);
             b.set_member_name("icon_url");b.add_string_value(icon_url);
@@ -48,6 +56,7 @@ namespace MajorisBrowser {
             app.id = o.get_string_member ("id");
             if (!ProfilePaths.valid_id (app.id)) throw new BrowserError.INVALID_APP ("Invalid application ID");
             app.installed_at = o.get_int_member ("installed_at");
+            app.scope_source=o.has_member("scope_source")?o.get_string_member("scope_source"):"legacy";
             if(o.has_member("manifest_url"))app.manifest_url=o.get_string_member("manifest_url");
             if(o.has_member("icon_url"))app.icon_url=o.get_string_member("icon_url");
             if(o.has_member("icon_path"))app.icon_path=o.get_string_member("icon_path");
@@ -66,7 +75,7 @@ namespace MajorisBrowser {
             string start=object.has_member("start_url")?Uri.resolve_relative(manifest_url,object.get_string_member("start_url"),UriFlags.NONE):document_url;
             if(UrlResolver.origin(start)!=UrlResolver.origin(document_url))throw new BrowserError.INVALID_APP("Manifest start URL must belong to the installing site");
             string scope=object.has_member("scope")?Uri.resolve_relative(manifest_url,object.get_string_member("scope"),UriFlags.NONE):Uri.resolve_relative(start,".",UriFlags.NONE);
-            var result=new WebApp(name,start,scope);result.manifest_url=manifest_url;
+            var result=new WebApp(name,start,scope);result.manifest_url=manifest_url;result.scope_source="manifest";
             if(object.has_member("display"))result.display_mode=object.get_string_member("display");
             foreach(string field in new string[]{"theme_color","background_color"})if(object.has_member(field) && object.get_member(field).get_value_type()==typeof(string)){
                 if(field=="theme_color")result.theme_color=object.get_string_member(field);else result.background_color=object.get_string_member(field);

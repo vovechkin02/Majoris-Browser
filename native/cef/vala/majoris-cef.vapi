@@ -20,12 +20,15 @@ namespace MajorisCef {
         public View (string profile, bool ephemeral, string url, string scope = "");
         [CCode(cname="mc_view_new_with_permissions")]
         public View.with_permissions(string profile,bool ephemeral,string url,string scope,string permissions);
+        [CCode(cname="mc_view_new_with_security")]
+        public View.with_security(string profile,bool ephemeral,string url,string scope,string permissions,bool threat_checks);
         public void set_permissions(string permissions);
         public void close ();
         public void request_close ();
         public void drag_end(int x,int y,int operation);
         public void drag_target(int phase,string text,string files,int x,int y);
         public void set_accessibility(bool enabled);
+        public void set_threat_checks(bool enabled);
         public void load (string url);
         public void command (string command);
         public void resize (int width, int height, double scale);

@@ -1,5 +1,21 @@
 # Verification results — 18 October 2026
 
+## Remaining-feature implementation (revision 0.1.0-4)
+
+Starting source `ff562f916110e9744d6d09b20c95984a2b5c92c7` was clean and matched origin/main (`git ls-remote` through the Linux environment). New source preserves the architecture and all 20 previous suites, adding three required groups. Workspace and final fresh-source runs both passed **23/23**, no failures/skips (`build/remaining-all-tests.log`, `build/remaining-clean-final.log`). Final source is `build-clean-remaining-final/source`, build output `build-clean-remaining-final/output`.
+
+The Debian build also passed the exact **23/23** gate (`build/remaining-package-final.log`). Artifacts are in `build-packages-remaining-final/`: main package `majoris-browser_0.1.0-4_amd64.deb` (251,282,540 bytes), debug symbols, buildinfo/changes, checksums, source-snapshot manifest, engine/CVE audit records and explicit RELEASE-BLOCKED notice. Main SHA-256: `38ad3ed3a134332f4f3104925f041b24adbf6fe2f5d480c7558fdeec52c51d92`.
+
+Archive ownership, sandbox mode, runtime resources/notices, installed search paths and extracted GTK/CEF smoke passed (`build/remaining-deb-runtime.log`), including both installed-app identities and storage restarts. AppStream/desktop-file validation passed (`build/remaining-metadata.log`), and `git diff --check` passed. No system installation/upgrade was performed. Only documentation was updated after the final compiled source snapshot; prior revision-3 artifacts are superseded. This is a development qualification, not production release approval.
+
+- `threat-protection`: deterministic local provider verdicts, no-known-threat versus unknown, configured outage, independent timeout, pre-cancelled/active cancellation, per-context cache/closure clearing and query/fragment minimisation. GLib cancellation initially exposed an unchecked async error; the async contract now propagates errors and callers refuse cancelled navigation.
+- `cef-threat-navigation`: protection enabled at initial view construction; real allowed HTTP load followed by a redirect to a phishing fixture. Server records prove the dangerous destination was never fetched. No live paid/reputation service is used.
+- `cef-media-playback`: original MediaRecorder-generated VP8/VP9/Opus WebM is decoded in separate Browser/app contexts. Both report advancing playback, decoded video frames and nonzero decoded Opus samples. H.264, AAC and combined MP4 report blocked because the current decoder is unavailable; no successful proprietary playback claim is made.
+- Domain fixtures add section fallback, unrelated paths, dot/encoded separator/port rejection, preservation of valid wide manifest scope, old metadata/identity and SQLite scope_source persistence. GTK smoke exercises the expanded install dialog and both independent app identities/storage restarts. Download fixtures verify persisted malicious/policy assessments cannot be opened, while normal unassessed completion retains explicit caution.
+- Platform runtime logs show HTML fullscreen enter/exit (1 then 0), while the pre-existing certificate/sandbox/Wasm/WSS/WebRTC/UA/permission/storage tests remain. Physical output, GPU decoding, hardware capture and actual target-desktop fullscreen/Wayland remain separate qualification.
+
+Engine provenance/index is `build/remaining-engine-audit.json`; the available stable pin is unchanged. security-assessment.md enumerates the ten unresolved newer fixes, without assuming Windows/Mac advisory wording settles Linux applicability. codec-runtime.md records the inactive GN template, external authorised SDK path and mandatory playback assets for a future codec-capable build. No API key, paid provider, codec implementation or CDM is shipped. No account credentials or real Sheets sign-in were used.
+
 ## Latest hardening pass
 
 Both fresh-source hardening builds passed 20/20 suites, with no failures or skips (`build/final-hardening-clean.log`, then the final source snapshot in `build/final-hardening-clean-final.log`). Targeted production-service/GTK checks also passed (`build/final-hardening-regressions.log`). Earlier revision-2 artifacts do not include this work.

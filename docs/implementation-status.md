@@ -1,5 +1,27 @@
 # Completion matrix — 18 October 2026
 
+## Remaining-feature pass (main ff562f9)
+
+| Feature | Status | Verified | Remaining blockers |
+|---|---|---|---|
+| Chromium security updates | Formally assessed, unresolved | Publisher/header/archive report; existing sandbox/TLS tests | Ten upstream .169 fixes lack Linux/CEF applicability/backport proof; available M152 stable remains .167 |
+| Phishing protection | Framework implemented; live service externally blocked | Local verdicts, cache ownership/TTL, timeout/cancel; real redirect cancelled before fetch | Authorised maintained provider, terms, privacy/update infrastructure |
+| Malware URL protection | Framework implemented; live service externally blocked | Malware/unwanted-software/no-known-threat/unknown/outage cases | Same provider dependency; no operational blacklist or remote calls |
+| Dangerous-download protection | Assessment model, persisted restrictions and software-opening caution | Metadata roundtrip/open guards; real downloads and private isolation | No content-scanning provider; ordinary files remain not assessed |
+| H.264 | Blocked by qualified runtime/licensing | Actual runtime reports unavailable; codec-capable runtime must pass local playback assets | Authorised codec-capable SDK, licensing/notices and H.264 playback qualification |
+| AAC | Blocked by qualified runtime/licensing | Actual runtime reports unavailable; open Opus decode/RMS verified | Authorised codec-capable SDK and AAC/combined-MP4 playback qualification |
+| Widevine | Externally blocked, optional | EME request refuses unavailable CDM | Vendor entitlement/binary/service/VMP qualification; no browser CDM copied |
+| Web-app navigation scopes | Implemented | Domain tests: section fallback, encoded/dot/port boundaries, manifest preservation, SQLite metadata/legacy survival; GTK install and native auth regressions | Existing broad legacy scopes require explicit review in Settings; complete section-edit UX needs native desktop qualification |
+| Google Sheets compatibility | Implemented app architecture; provider runtime unverified | Independent contexts, local OAuth, two app identities/storage restarts | Authorised real account and Majoris desktop unavailable, as already confirmed |
+| Accessibility | Supported transport preserved | Real AX/AT-SPI text/frame/focus/Unicode/protected/live geometry tests | Pinned OSR lacks public node-action/edit dispatch; Orca/native layout gates |
+| Picture-in-Picture | Upstream-blocked, optional | Real unsupported result; entry omitted | Alloy OSR still rejects PiP; no engine upgrade in this pass |
+| Session restoration | Implemented URL/window recovery | Existing snapshots/private exclusion/lifecycle | No supported serialized navigation-stack import; no replay workaround |
+| Task Manager | Implemented supported metrics | Existing native metrics/termination tests | No trustworthy public PID/network/parent identifiers |
+| Wayland integration | Implemented but native runtime unverified | X11 input/clipboard/drag and direct Unicode commit only | Native Wayland, IME candidate UI, scale/dock/theme environment unavailable |
+| Debian packaging | Development revision 0.1.0-4 built | Fresh-source 23/23; Debian 23/23; archive/extracted-runtime/metadata passed | Security/provider/codec and manual gates prevent production approval |
+
+This assessment supersedes prior pass counts/status where coverage changed. Source architecture and all existing tests are retained. Detailed engine triage is in security-assessment.md; runtime integration conditions are in codec-runtime.md.
+
 ## Final hardening qualification
 
 | Feature | Implemented | Tested | Remaining limitations |
@@ -51,7 +73,7 @@ This is a development build. Automated fixture results qualify the tested paths,
 | Task Manager | Implemented and tested for supported metrics | Retained CEF observer, correct task-type mapping, CPU/memory/GPU memory with unknown/aggregate handling, current-page association, sorting and supported termination. PID/network/explicit parent IDs are absent from CefTaskInfo; no guessed values. |
 | Desktop identities, icons, notifications | Implemented and fixture-tested | Distinct X11 WM_CLASS values matching desktop entries, generated icons, process identity/resource name and native Chromium D-Bus web notifications. Browser/app concurrent lifetime and notification click/close tested. Two installed local apps and restarted storage are fixture-tested; dock pin/grouping, Alt+Tab and Majoris Theme presentation remain unverified on the real desktop. |
 | UA and UA-CH | Implemented and tested | Linked engine version and Majoris brand in renderer UA, brands/high-entropy metadata and actual HTTP Client Hints headers. No provider bypass. |
-| Packaging and fresh-source builds | Implemented and tested | Clean source and hardened package: 20/20 suites; extracted runtime and metadata validation passed. GTK minimum 4.18, libpsl, AT-SPI and XTest test prerequisites; package revision 0.1.0-2; package verifier requires all 20 suites. Native installation/upgrade is a separate manual gate. |
+| Packaging and fresh-source builds | Implemented and tested | Current clean source and hardened package: 23/23 suites; extracted runtime and metadata validation passed. GTK minimum 4.18, libpsl, AT-SPI and XTest prerequisites; revision 0.1.0-4; verifier requires all 23 suites. Native installation/upgrade remains manual. |
 | Excluded product scope | Not implemented, as requested | Rewards/wallet/VPN/Tor/cloud sync/Chrome Web Store/AI/advanced farbling and a closed-app push daemon remain excluded. |
 
 ## API alternatives and release gates

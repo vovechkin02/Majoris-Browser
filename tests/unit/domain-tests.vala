@@ -132,5 +132,13 @@ void main (string[] args) {
             store.clear_browser_records(true,true,true,now-3600,true);assert(store.search(false).size==1 && store.search(false)[0].title=="Old");assert(store.search(true).size==1);assert(store.permission_value("browser","https://site.test/","camera")==0);assert(store.permission_value("app-id","https://site.test/","camera")==1);assert(store.password_blocked("browser","https://site.test/"));assert(store.addresses().size==0 && store.download_records().size==3);
         }catch(Error e){error("%s",e.message);}
     });
+    Test.add_func("/webapps/section-scope-and-legacy",()=>{
+        try{var app=new WebApp("Section","https://example.test/app/document/edit?token=x#fragment");assert(app.scope=="https://example.test/app/" && app.scope_source=="inferred");var policy=new WebAppNavigationPolicy(app.scope);
+            foreach(string url in new string[]{"https://example.test/application-other/","https://example.test/app/../outside/","https://example.test/app/%2e%2e/outside/","https://example.test/app%2foutside/","https://example.test:444/app/"})assert(policy.classify(url)==NavigationDecision.EXTERNAL);
+            assert(policy.classify("https://example.test/app/child?q=1")==NavigationDecision.APP_SCOPE);var store=new Store(":memory:");store.put_app(app);string identity=app.id;app.scope_source="confirmed";store.put_app(app);assert(store.get_app(identity).scope==app.scope && store.get_app(identity).scope_source=="confirmed");
+            var manifest=WebApp.from_manifest("{\"start_url\":\"/app/start\",\"scope\":\"/\"}","https://example.test/manifest.json","https://example.test/app/","Name");assert(manifest.scope=="https://example.test/" && manifest.scope_source=="manifest");
+            var legacy=WebApp.deserialize("{\"id\":\"a0123456789abcdef0123456789abcdef\",\"name\":\"Legacy\",\"start_url\":\"https://example.test/app/start\",\"scope\":\"https://example.test/\",\"installed_at\":1}");assert(legacy.scope=="https://example.test/" && legacy.scope_source=="legacy");assert(WebApp.deserialize(legacy.serialize()).id==legacy.id);
+        }catch(Error e){error("%s",e.message);}
+    });
     Test.run ();
 }

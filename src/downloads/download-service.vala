@@ -23,6 +23,8 @@ namespace MajorisBrowser {
                 foreach(var candidate in records)if(candidate.control==view && candidate.native_id==id){record=candidate;break;}
                 if(record==null){record=new DownloadRecord();record.profile=profile;record.session=sessions[view];record.control=view;record.native_id=id;record.ephemeral=ephemeral;records.insert(0,record);}
                 record.source=o.get_string_member("source");record.destination=o.get_string_member("path");record.filename=Path.get_basename(record.destination);record.status=o.get_string_member("status");record.received=o.get_int_member("received");record.total=o.get_int_member("total");record.speed=o.get_int_member("speed");record.error_detail=o.get_string_member("error");
+                if(record.status=="security-blocked")record.assessment=record.error_detail=="7"?DownloadAssessment.MALICIOUS:DownloadAssessment.POLICY_BLOCKED;
+                else if(record.status=="security-check-failed")record.assessment=DownloadAssessment.UNAVAILABLE;
                 if(record.status!="active" && record.status!="paused")record.completed=new DateTime.now_utc().to_unix();
                 persist(record);changed();
             }catch(Error e){warning("Downloads: %s",e.message);}

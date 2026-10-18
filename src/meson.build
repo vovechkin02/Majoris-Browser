@@ -8,6 +8,7 @@ config_vapi = files('config.vapi')
 browser_exe = executable('majoris-browser', domain_sources, config_vapi,
   '../native/cef/vala/majoris-cef.vapi',
   'application.vala', 'browser-window.vala', 'web-app-window.vala',
+  'security/security-warning.vala','security/navigation-security.vala',
   'ui/browser-surface.vala', 'ui/engine-dialogs.vala', 'ui/task-manager.vala',
   'ui/page-actions.vala',
   'ui/page-context-menu.vala',

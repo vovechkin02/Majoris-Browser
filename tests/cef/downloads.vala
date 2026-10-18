@@ -5,6 +5,7 @@ namespace MajorisBrowser { public class Application : Object {
     public Application(string path){storage=new StoreWorker(path);}
 }}
 int main(string[] args){
+    try{var blocked=new DownloadRecord();blocked.status="complete";blocked.assessment=DownloadAssessment.MALICIOUS;assert(!DownloadRecord.parse(blocked.serialize()).may_open);blocked.assessment=DownloadAssessment.POLICY_BLOCKED;assert(!DownloadRecord.parse(blocked.serialize()).may_open);blocked.assessment=DownloadAssessment.PENDING;assert(!blocked.may_open);blocked.assessment=DownloadAssessment.NOT_ASSESSED;assert(blocked.may_open);}catch(Error e){error("%s",e.message);}
     if(args.length==3 && args[1]=="--verify-store"){
         try{string path=Path.build_filename(args[2],"private-download.bin");assert(FileUtils.test(path,FileTest.IS_REGULAR));var store=new Store(Path.build_filename(args[2],"service.db"));assert(store.download_records().size>0);foreach(string text in store.download_records()){var record=DownloadRecord.parse(text);assert(!record.ephemeral && record.session=="" && record.destination!=path);}stdout.printf("Separate-process restart: private metadata absent and downloaded file retained: PASS\n");return 0;}catch(Error e){error("%s",e.message);}
     }

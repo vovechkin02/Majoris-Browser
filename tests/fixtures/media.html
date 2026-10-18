@@ -4,7 +4,7 @@
 <video id="video" muted playsinline style="position:absolute;left:0;top:90px;width:320px;height:180px"></video>
 <script>
 window.context=null;
-start.onclick=async()=>{context=new AudioContext();const source=context.createOscillator();const gain=context.createGain();gain.gain.value=.03;source.connect(gain).connect(context.destination);source.start();await context.resume();};
+start.onclick=async()=>{video.requestFullscreen().then(()=>document.exitFullscreen());context=new AudioContext();const source=context.createOscillator();const gain=context.createGain();gain.gain.value=.03;source.connect(gain).connect(context.destination);source.start();await context.resume();};
 const paint=()=>{const c=canvas.getContext('2d');c.fillStyle='#3874cb';c.fillRect(0,0,160,90);requestAnimationFrame(paint);};paint();
 video.srcObject=canvas.captureStream(10);
 </script>

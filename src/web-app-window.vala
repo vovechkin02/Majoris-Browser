@@ -9,9 +9,10 @@ namespace MajorisBrowser {
             var header = new Adw.HeaderBar (); header.decoration_layout = ":minimize,maximize,close";
             layout.add_top_bar (header);
             try {
-                surface = engine==null?new OffscreenBrowserSurface (app.paths.webapp_context (metadata.id),false,initial_url??metadata.start_url,metadata.scope,app.permissions.serialized()):new OffscreenBrowserSurface.with_engine(engine);
+                surface = engine==null?new OffscreenBrowserSurface (app.paths.webapp_context (metadata.id),false,initial_url??metadata.start_url,metadata.scope,app.permissions.serialized(),app.threats.configured):new OffscreenBrowserSurface.with_engine(engine);
                 app.permissions.attach(surface.engine);
                 app.downloads.attach(surface.engine);
+                NavigationSecurity.attach(app,surface,metadata.id);
                 surface.engine.popup.connect((child,background,url,new_window)=>{
                     try{if(new WebAppNavigationPolicy(metadata.scope).classify(url)==NavigationDecision.APP_SCOPE || child.is_auth_popup())new WebAppWindow(app,metadata,child).present();else{child.close();app.open_external(url);}}catch(Error e){child.close();EngineDialogs.show_error(this,e.message);}
                 });

@@ -6,6 +6,7 @@ namespace MajorisBrowser {
         public SessionService sessions;
         public PermissionService permissions;
         public DownloadService downloads;
+        public ThreatProtectionService threats=new ThreatProtectionService();
         public signal void bookmarks_changed();
         private bool session_started;
         public WebApp? webapp;

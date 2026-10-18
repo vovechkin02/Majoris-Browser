@@ -82,7 +82,7 @@ class DragBytes : public CefWriteHandler {
 class Client : public CefClient, public CefLifeSpanHandler, public CefRenderHandler,
  public CefDisplayHandler, public CefLoadHandler, public CefRequestHandler,
  public CefContextMenuHandler, public CefJSDialogHandler, public CefDialogHandler,
- public CefDownloadHandler, public CefPermissionHandler, public CefDevToolsMessageObserver, public CefPrintHandler, public CefFocusHandler, public CefAccessibilityHandler {
+ public CefDownloadHandler, public CefPermissionHandler, public CefDevToolsMessageObserver, public CefPrintHandler, public CefFocusHandler, public CefAccessibilityHandler, public CefResourceRequestHandler {
  public:
   GWeakRef view;
   CefRefPtr<CefBrowser> browser;
@@ -90,6 +90,12 @@ class Client : public CefClient, public CefLifeSpanHandler, public CefRenderHand
   int width=800, height=600;
   float scale=1;
   bool closing=false;
+  std::atomic<bool> threat_checks=false;
+  CefRefPtr<CefResourceRequestHandler> GetResourceRequestHandler(CefRefPtr<CefBrowser>,CefRefPtr<CefFrame> frame,CefRefPtr<CefRequest>,bool navigation,bool,const CefString&,bool&) override {return threat_checks && navigation && frame && frame->IsMain()?this:nullptr;}
+  ReturnValue OnBeforeResourceLoad(CefRefPtr<CefBrowser>,CefRefPtr<CefFrame>,CefRefPtr<CefRequest> resource,CefRefPtr<CefCallback> callback) override {
+    std::string url=resource->GetURL();CefURLParts parts;if(!CefParseURL(url,parts) || (CefString(&parts.scheme)!="https" && CefString(&parts.scheme)!="http"))return RV_CONTINUE;
+    CefRefPtr<Client> keep=this;ui([keep,url,callback]{if(keep->closing){callback->Cancel();return;}int token=keep->request("threat-check",url,"",[callback](bool allowed,std::string){if(allowed)callback->Continue();else callback->Cancel();});CefPostDelayedTask(TID_UI,new Task([keep,token]{keep->reply(token,false,"");}),5000);});return RV_CONTINUE_ASYNC;
+  }
   bool close_requested=false;
   bool source_drag_active=false;
   bool accessibility_enabled=false;
@@ -404,9 +410,10 @@ class Client : public CefClient, public CefLifeSpanHandler, public CefRenderHand
     g_clear_error(&error);
     bool ok=false;
     if (u && s && g_uri_get_host(u) && g_uri_get_host(s)) {
-      std::string path=g_uri_get_path(u), base=g_uri_get_path(s);
+      auto normalized=[](const std::string &url){gchar *resolved=g_uri_resolve_relative(url.c_str(),"",G_URI_FLAGS_ENCODED_PATH,nullptr);GUri *parsed=resolved?g_uri_parse(resolved,G_URI_FLAGS_ENCODED_PATH,nullptr):nullptr;std::string path=parsed?g_uri_get_path(parsed):"";if(parsed)g_uri_unref(parsed);g_free(resolved);std::string lower=path;std::transform(lower.begin(),lower.end(),lower.begin(),[](unsigned char c){return g_ascii_tolower(c);});if(path.find('\\')!=std::string::npos || lower.find("%2e")!=std::string::npos || lower.find("%2f")!=std::string::npos || lower.find("%5c")!=std::string::npos)return std::string();return path.empty()?std::string("/"):path;};
+      std::string path=normalized(url), base=normalized(scope);
       auto port=[](GUri *v) { int p=g_uri_get_port(v); return p<0 ? (g_strcmp0(g_uri_get_scheme(v),"https")==0 ? 443:80):p; };
-      bool boundary=path==base || path.rfind(base+(base.ends_with('/')?"":"/"),0)==0;
+      bool boundary=!path.empty() && !base.empty() && (path==base || path.rfind(base+(base.ends_with('/')?"":"/"),0)==0);
       ok=g_strcmp0(g_uri_get_scheme(u),g_uri_get_scheme(s))==0 && g_ascii_strcasecmp(g_uri_get_host(u),g_uri_get_host(s))==0 && port(u)==port(s) && boundary;
     }
     if(u) g_uri_unref(u); if(s) g_uri_unref(s); return ok;
@@ -476,7 +483,7 @@ class Client : public CefClient, public CefLifeSpanHandler, public CefRenderHand
     if(candidate && (!flow || auth_flow->return_uri!=back || auth_flow->state!=state)){
       revoke_auth("new-popup-flow");auth_flow=std::make_shared<AuthFlow>();auth_flow->initiator=AuthFlow::origin(source->GetURL());auth_flow->return_uri=back;auth_flow->state=state;
     }
-    auto *child=static_cast<McView*>(g_object_new(MC_TYPE_VIEW,nullptr));auto keep=CefRefPtr<Client>(new Client(child,scope));child->state->client=keep;child->state->auth_popup=candidate || (flow && trusted);keep->context=context;keep->opener=this;keep->popup_id=id;keep->auth_flow=auth_flow;keep->permission_policy=permission_policy;
+    auto *child=static_cast<McView*>(g_object_new(MC_TYPE_VIEW,nullptr));auto keep=CefRefPtr<Client>(new Client(child,scope));child->state->client=keep;child->state->auth_popup=candidate || (flow && trusted);keep->context=context;keep->opener=this;keep->popup_id=id;keep->auth_flow=auth_flow;keep->permission_policy=permission_policy;keep->threat_checks=threat_checks.load();
     if(!private_key.empty()){keep->private_key=private_key;++private_contexts[private_key].second;}
     popup_children[id]=keep;{std::lock_guard lock(lifecycle_mutex);++live;}
     window.SetAsWindowless(0);window.runtime_style=CEF_RUNTIME_STYLE_ALLOY;client=keep;
@@ -491,6 +498,7 @@ class Client : public CefClient, public CefLifeSpanHandler, public CefRenderHand
   bool OnBeforeBrowse(CefRefPtr<CefBrowser>,CefRefPtr<CefFrame> f,CefRefPtr<CefRequest> r,bool gesture,bool redirect) override {
     CefURLParts parts;if(CefParseURL(r->GetURL(),parts) && (CefString(&parts.scheme)=="https" || CefString(&parts.scheme)=="http"))apply_permissions(CefString(&parts.origin));
     if(f->IsMain()){
+      if(threat_checks)event("threat-navigation",r->GetURL());
 
 
       auto target=r->GetURL().ToString();
@@ -772,10 +780,14 @@ McView *mc_view_new(const char *profile,gboolean ephemeral,const char *url,const
   return mc_view_new_with_permissions(profile,ephemeral,url,scope,"[]");
 }
 McView *mc_view_new_with_permissions(const char *profile,gboolean ephemeral,const char *url,const char *scope,const char *permissions) {
+  return mc_view_new_with_security(profile,ephemeral,url,scope,permissions,false);
+}
+McView *mc_view_new_with_security(const char *profile,gboolean ephemeral,const char *url,const char *scope,const char *permissions,gboolean threat_checks) {
   auto *v=MC_VIEW(g_object_new(MC_TYPE_VIEW,nullptr));
   if(!ephemeral && g_mkdir_with_parents(profile,0700)!=0){g_object_unref(v);return nullptr;}
   CefRefPtr<Client> c=new Client(v,scope); v->state->client=c;
   c->set_permissions(permissions);
+  c->threat_checks=threat_checks;
   std::string path=profile, target=url;
   {std::lock_guard lock(lifecycle_mutex); ++live;}
   ui([c,path,target,ephemeral] {
@@ -799,6 +811,7 @@ void mc_view_close(McView *v) { auto c=v->state->client; if(c) ui([c]{c->closing
 void mc_view_request_close(McView *v) {auto c=v->state->client;if(c)ui([c]{if(c->closing || c->close_requested)return;c->close_requested=true;if(c->browser)c->browser->GetHost()->CloseBrowser(false);});}
 void mc_view_drag_end(McView *v,int x,int y,int operation){auto c=v->state->client;ui([c,x,y,operation]{c->end_drag(x,y,operation);});}
 void mc_view_set_accessibility(McView *v,gboolean enabled){auto c=v->state->client;ui([c,enabled]{c->accessibility_enabled=enabled;if(c->browser)c->browser->GetHost()->SetAccessibilityState(enabled?STATE_ENABLED:STATE_DISABLED);});}
+void mc_view_set_threat_checks(McView *v,gboolean enabled){v->state->client->threat_checks=enabled;}
 void mc_view_load(McView *v,const char *url) { auto c=v->state->client; std::string s=url; ui([c,s]{if(c->browser)c->browser->GetMainFrame()->LoadURL(s);}); }
 void mc_view_resize(McView *v,int w,int h,double s) { auto c=v->state->client; ui([c,w,h,s]{c->width=std::clamp(w,1,16384); c->height=std::clamp(h,1,16384); c->scale=std::isfinite(s)?std::clamp(s,0.5,4.0):1; if(c->browser){c->browser->GetHost()->NotifyScreenInfoChanged(); c->browser->GetHost()->WasResized();}}); }
 void mc_view_focus(McView *v,gboolean focus) { auto c=v->state->client; ui([c,focus]{if(c->browser)c->browser->GetHost()->SetFocus(focus);}); }

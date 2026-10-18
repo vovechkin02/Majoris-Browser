@@ -1,3 +1,13 @@
+majoris-browser (0.1.0-4) unstable; urgency=medium
+
+  * Add disabled-by-default threat-provider architecture and async navigation gate.
+  * Qualify local threat verdicts, redirect blocking and download assessment states.
+  * Narrow inferred app sections, confirm installation scope and allow safe review.
+  * Preserve legacy app identity/data and qualify original synthetic media playback.
+  * Document external codec/provider dependencies and unresolved engine security.
+
+ -- Majoris Developers <developers@majoris.org>  Mon, 19 Oct 2026 04:30:00 +1100
+
 majoris-browser (0.1.0-3) unstable; urgency=medium
 
   * Isolate private download metadata and controls by owning request context.

@@ -43,8 +43,8 @@ namespace MajorisBrowser {
         private double pointer_y;
         private Gtk.Box error_box=new Gtk.Box(Gtk.Orientation.VERTICAL,12);
         private Gtk.Label error_message=new Gtk.Label("");
-        public OffscreenBrowserSurface (string profile, bool ephemeral, string target, string scope = "",string permissions="[]") {
-            this.with_engine(new MajorisCef.View.with_permissions(profile,ephemeral,target,scope,permissions));
+        public OffscreenBrowserSurface (string profile, bool ephemeral, string target, string scope = "",string permissions="[]",bool threat_checks=false) {
+            this.with_engine(new MajorisCef.View.with_security(profile,ephemeral,target,scope,permissions,threat_checks));
         }
         public OffscreenBrowserSurface.with_engine(MajorisCef.View supplied) {
             WebDrag.attach(this);

@@ -181,10 +181,11 @@ namespace MajorisBrowser {
         private void command (string name) { if(selected!=null)selected.engine.command(name); }
         private async void paste_address(bool search){try{string? value=yield get_clipboard().read_text_async(null);if(value!=null && selected!=null)selected.navigate(search?app.preferences.get_string("search-template").replace("%s",Uri.escape_string(value,null,false)):UrlResolver.resolve(value,app.preferences.get_string("search-template")));}catch(Error e){}}
         public void add_tab (string url,bool background=false) {
-            add_surface(new OffscreenBrowserSurface(is_private?window_id:app.paths.browser_context,is_private,url,"",is_private?"[]":app.permissions.serialized()),background);
+            add_surface(new OffscreenBrowserSurface(is_private?window_id:app.paths.browser_context,is_private,url,"",is_private?"[]":app.permissions.serialized(),app.threats.configured),background);
         }
         private void add_surface(BrowserSurface surface,bool background=false){
             app.downloads.attach(surface.engine,is_private?window_id:"");
+            NavigationSecurity.attach(app,surface,is_private?"private:"+window_id:"browser");
             app.permissions.attach(surface.engine,is_private);
             var page=tabs.append(surface);page.title=_("New Tab");if(!background)tabs.selected_page=page;
             page.notify["pinned"].connect(()=>app.sessions.changed());
@@ -310,12 +311,15 @@ namespace MajorisBrowser {
             if(selected!=null)selected.engine.command("source-metadata");
         }
         private void confirm_install (WebApp metadata,Bytes? image=null) {
-            var dialog=new Adw.AlertDialog(_("Install as App"),metadata.start_url);var name=new Gtk.Entry();name.text=metadata.name;dialog.extra_child=name;
+            var dialog=new Adw.AlertDialog(_("Install as App"),metadata.start_url);var name=new Gtk.Entry();name.text=metadata.name;name.placeholder_text=_("Application name");
+            var box=new Gtk.Box(Gtk.Orientation.VERTICAL,8);Icon icon_source=new ThemedIcon("web-browser-symbolic");if(image!=null)icon_source=new BytesIcon(image);var icon=new Gtk.Image.from_gicon(icon_source);icon.pixel_size=64;box.append(icon);box.append(new Gtk.Label(_("Application name")));box.append(name);
+            var scope=new Gtk.Entry();scope.text=metadata.scope;scope.editable=metadata.scope_source!="manifest";box.append(new Gtk.Label(metadata.scope_source=="manifest"?_("Website-defined application section"):_("Keep links in this application section")));box.append(scope);var hint=new Gtk.Label(_("Links outside this section open in Browser. Confirm the proposed section before installing."));hint.wrap=true;box.append(hint);dialog.extra_child=box;
             dialog.add_response("cancel",_("Cancel"));dialog.add_response("install",_("Install"));dialog.add_response("pin",_("Install and Pin to Dock"));
             dialog.response.connect((id)=>{
                 if(id=="cancel")return;
                 try {
                     metadata.name=name.text.strip();if(metadata.name=="")throw new BrowserError.INVALID_APP("Application name is empty");
+                    var policy=new WebAppNavigationPolicy(scope.text.strip());if(policy.classify(metadata.start_url)!=NavigationDecision.APP_SCOPE)throw new BrowserError.INVALID_APP("The application section must contain its start URL");metadata.scope=scope.text.strip();if(metadata.scope_source!="manifest")metadata.scope_source="confirmed";
                     bool pin=id=="pin";
                     app.hold();
                     app.storage.run((store)=>{

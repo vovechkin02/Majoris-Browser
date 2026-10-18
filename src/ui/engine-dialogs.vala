@@ -13,7 +13,7 @@ namespace MajorisBrowser {
             surface.engine.request.connect ((token,kind,origin,message) => {
                 Gtk.Window owner=surface.get_root() as Gtk.Window ?? window;
                 if(surface.closed){surface.engine.reply(token,false,"");return;}
-                if(kind=="print-setup" || kind=="print-job")return;
+                if(kind=="print-setup" || kind=="print-job" || kind=="threat-check")return;
                 if(kind.has_prefix("permission:")){permission.begin(surface,owner,token,kind.substring(11),origin);return;}
                 if (kind == "file" || kind == "download") {
                     choose_file.begin (surface,owner,token,kind,message); return;
