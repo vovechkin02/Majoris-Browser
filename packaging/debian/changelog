@@ -1,3 +1,14 @@
+majoris-browser (0.1.0-3) unstable; urgency=medium
+
+  * Isolate private download metadata and controls by owning request context.
+  * Label unassessed downloads and confirm before opening downloaded software.
+  * Support trusted username-first flows without persisting intermediate names.
+  * Transport non-atomic editable AX text and suppress protected descendants.
+  * Qualify two installed GTK identities, sandbox/TLS boundaries and web APIs.
+  * Pin SHA-256 archive integrity alongside the publisher SHA-1 digest.
+
+ -- Majoris Developers <developers@majoris.org>  Mon, 19 Oct 2026 03:30:00 +1100
+
 majoris-browser (0.1.0-2) unstable; urgency=medium
 
   * Correct cancelled clear-on-exit and durable web-app uninstall recovery.

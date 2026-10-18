@@ -28,7 +28,8 @@ namespace MajorisBrowser {
             if(owner==null || !data.has_member("location"))return false;
             double ax,ay,px=0,py=0;if(!owner.position(this,out ax,out ay))return false;
             var parent=parent_node as WebAccessibleNode;if(parent!=null && !owner.position(parent,out px,out py))return false;
-            var rect=data.get_object_member("location");x=(int)(ax-px);y=(int)(ay-py);width=(int)rect.get_double_member("width");height=(int)rect.get_double_member("height");return true;
+            var rect=data.get_object_member("location");double left=ax-px,top=ay-py,right=left+rect.get_double_member("width"),bottom=top+rect.get_double_member("height");
+            x=(int)left;y=(int)top;if(x>left)x--;if(y>top)y--;int end_x=(int)right,end_y=(int)bottom;if(end_x<right)end_x++;if(end_y<bottom)end_y++;width=int.max(0,end_x-x);height=int.max(0,end_y-y);return true;
         }
         public bool state_has(string name){if(!data.has_member("state"))return false;foreach(var value in data.get_array_member("state").get_elements())if(value.get_string()==name)return true;return false;}
         public string attribute(string name){if(!data.has_member("attributes"))return "";var a=data.get_object_member("attributes");if(!a.has_member(name))return "";var v=a.get_member(name);return v.get_value_type()==typeof(string)?v.get_string():Json.to_string(v,false);}
@@ -48,7 +49,7 @@ namespace MajorisBrowser {
         public WebAccessibleTextNode(WebAccessibleHost host,int id,Gtk.AccessibleRole role,Json.Object data){base(host,id,role,data);}
         private uint char_offset(int units){uint result=0;int consumed=0;for(int i=0;i<text.char_count() && consumed<units;i++){unichar c=text.get_char(text.index_of_nth_char(i));consumed+=c>0xffff?2:1;result++;}return result;}
         public void refresh_text(){
-            string next="";if(!state_has("protected") && attribute("inputType")!="password"){if(data.get_string_member("role")=="textField" || data.get_string_member("role")=="searchBox")next=attribute("value");else next=attribute("name");}
+            string next="";if(owner!=null && !owner.protected_text(this)){if(data.get_string_member("role")=="textField" || data.get_string_member("role")=="searchBox"){next=attribute("value");if(attribute("nonAtomicTextFieldRoot")=="true")next=owner.editable_text(this);}else next=attribute("name");}
             if(next!=text){uint old=(uint)text.char_count();if(old>0)update_contents(Gtk.AccessibleTextContentChange.REMOVE,0,old);text=next;if(text!="")update_contents(Gtk.AccessibleTextContentChange.INSERT,0,(uint)text.char_count());if(old>0 && attribute("containerLiveStatus")!="" && text!="")announce(text,attribute("containerLiveStatus")=="assertive"?Gtk.AccessibleAnnouncementPriority.HIGH:Gtk.AccessibleAnnouncementPriority.MEDIUM);}
             update_caret_position();update_selection_bound();
         }
@@ -61,7 +62,7 @@ namespace MajorisBrowser {
             if(granularity==Gtk.AccessibleTextGranularity.CHARACTER)end=start+1;
             else { // Unicode word and sentence boundaries are supplied by Pango.
                 Pango.LogAttr[] attrs=new Pango.LogAttr[length+1];Pango.get_log_attrs(text,-1,-1,Pango.Language.get_default(),attrs);
-                if(granularity==Gtk.AccessibleTextGranularity.WORD){while(start>0 && attrs[start].is_word_start==0)start--;end=uint.min(offset+1,length);while(end<length && attrs[end].is_word_end==0)end++;}
+                if(granularity==Gtk.AccessibleTextGranularity.WORD){while(start>0 && attrs[start].is_word_start==0 && attrs[start].is_word_end==0)start--;end=uint.min(offset+1,length);while(end<length && attrs[end].is_word_end==0 && attrs[end].is_word_start==0)end++;}
                 else if(granularity==Gtk.AccessibleTextGranularity.SENTENCE){while(start>0 && attrs[start].is_sentence_start==0)start--;end=uint.min(offset+1,length);while(end<length && attrs[end].is_sentence_end==0)end++;}
                 else {while(start>0 && text.get_char(text.index_of_nth_char((int)start-1))!='\n')start--;end=uint.min(offset+1,length);while(end<length && text.get_char(text.index_of_nth_char((int)end-1))!='\n')end++;}
             }return get_contents(start,end);
@@ -78,6 +79,15 @@ namespace MajorisBrowser {
         private string tree_id="";
         public WebAccessibleHost(BrowserSurface source){surface=source;can_target=false;focusable=false;source.notify["has-focus"].connect(()=>{foreach(var node in nodes.values)if(node.parent_node!=null)accessible_platform_changed(node,Gtk.AccessiblePlatformState.FOCUSED);});}
         public new Gtk.Accessible? get_first_accessible_child(){return root_node;}
+        public bool protected_text(WebAccessibleNode node){
+            WebAccessibleNode? current=node;int depth=0;while(current!=null && depth++<128){if(current.state_has("protected") || current.attribute("inputType")=="password")return true;current=current.parent_node as WebAccessibleNode;}return false;
+        }
+        public string editable_text(WebAccessibleNode node){var text=new StringBuilder();var seen=new Gee.HashSet<string>();append_text(node,text,seen,0);return text.len<=1024*1024?text.str:"";}
+        private void append_text(WebAccessibleNode node,StringBuilder text,Gee.HashSet<string> seen,int depth){
+            string key=node.tree+":"+node.node_id.to_string();if(depth>128 || seen.contains(key) || text.len>1024*1024 || protected_text(node))return;seen.add(key);
+            string role=node.data.get_string_member("role");if(role=="staticText"){text.append(node.attribute("name"));return;}if(role=="lineBreak"){text.append("\n");return;}
+            if(node.data.has_member("child_ids"))foreach(var id in node.data.get_array_member("child_ids").get_elements()){var child=nodes[node.tree+":"+id.get_int().to_string()];if(child!=null)append_text(child,text,seen,depth+1);}
+        }
         public bool position(WebAccessibleNode node,out double x,out double y){
             x=0;y=0;if(node.tree!=tree_id)return false;var seen=new Gee.HashSet<int>();WebAccessibleNode? current=node;
             while(current!=null){if(seen.size>128 || seen.contains(current.node_id) || current.data.has_member("transform") || !current.data.has_member("location"))return false;seen.add(current.node_id);var location=current.data.get_object_member("location");x+=location.get_double_member("x");y+=location.get_double_member("y");if(!current.data.has_member("offset_container_id"))return current==root_node;
@@ -116,11 +126,14 @@ namespace MajorisBrowser {
                     if(update.has_member("nodes"))foreach(var item in update.get_array_member("nodes").get_elements()){
                         var data=item.get_object();int key=(int)data.get_int_member("id");string r=data.get_string_member("role");var mapped=role(r);string identity=id+":"+key.to_string();var node=nodes[identity];
                         if(node==null || node.accessible_role!=mapped){if(node!=null)node.set_accessible_parent(null,null);node=r=="textField" || r=="searchBox" || r=="staticText"?new WebAccessibleTextNode(this,key,mapped,data):new WebAccessibleNode(this,key,mapped,data);node.tree=id;nodes[identity]=node;}
-                        node.data=data;node.refresh();var text=node as WebAccessibleTextNode;if(text!=null)text.refresh_text();
+                        node.data=data;
                     }
                 }
                 if(nodes.size>20000){clear();return;}
                 var visited=new Gee.HashSet<string>();root_node=nodes[tree_id+":"+roots[tree_id].to_string()];if(root_node!=null)connect_tree(root_node,this,null,visited,0);
+                // Non-atomic editable roots store text in AX staticText children,
+                // not in a value attribute. Refresh after all nodes and parents exist.
+                foreach(string key in visited){var node=nodes[key];node.refresh();var text=node as WebAccessibleTextNode;if(text!=null)text.refresh_text();if(!node.state_has("protected") && protected_text(node))node.update_property(Gtk.AccessibleProperty.LABEL,"");}
                 // A subframe update may precede its parent's childTreeId. Bound orphan
                 // retention and prune detached nodes within each updated engine tree.
                 var local=new Gee.HashSet<string>();var local_root=nodes[id+":"+roots[id].to_string()];if(local_root!=null)mark_tree(local_root,local,0);

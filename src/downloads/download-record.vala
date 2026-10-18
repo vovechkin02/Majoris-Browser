@@ -13,6 +13,17 @@ namespace MajorisBrowser {
         public string status="active";
         public string error_detail="";
         public bool ephemeral;
+        // In-memory only. Private context keys must never be serialized.
+        public string session="";
+        public bool visible_in(string profile,string session){return this.profile==profile && (session==""?!ephemeral:ephemeral && this.session==session);}
+        public bool risky_to_open(){
+            string name=filename.down();
+            // The automatic destination chooser appends " (n)" on collisions.
+            int suffix_start=name.last_index_of(" (");if(suffix_start>0 && name.has_suffix(")")){string number=name.substring(suffix_start+2,name.length-suffix_start-3);uint64 sequence;if(uint64.try_parse(number,out sequence))name=name.substring(0,suffix_start);}
+            foreach(string suffix in new string[]{".exe",".msi",".com",".bat",".cmd",".ps1",".sh",".bash",".fish",".zsh",".py",".pl",".rb",".run",".bin",".appimage",".desktop",".deb",".rpm",".apk",".jar",".js",".vbs",".scr"})if(name.has_suffix(suffix))return true;
+            // Unix executability is also relevant for extensionless files.
+            return destination!="" && FileUtils.test(destination,FileTest.IS_EXECUTABLE);
+        }
         public uint native_id;
         public MajorisCef.View? control;
         public string serialize(){var b=new Json.Builder();b.begin_object();

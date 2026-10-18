@@ -8,3 +8,4 @@ start.onclick=async()=>{context=new AudioContext();const source=context.createOs
 const paint=()=>{const c=canvas.getContext('2d');c.fillStyle='#3874cb';c.fillRect(0,0,160,90);requestAnimationFrame(paint);};paint();
 video.srcObject=canvas.captureStream(10);
 </script>
+<script src="/compatibility.js"></script>

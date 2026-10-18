@@ -76,11 +76,35 @@ with tempfile.TemporaryDirectory(prefix='majoris-ui-') as temp:
     while identity not in x11_identities():
         assert application.poll() is None and time.monotonic()<deadline,'Installed app WM_CLASS does not match its generated desktop entry'
         time.sleep(.1)
+    second=None
+    deadline=time.monotonic()+10
+    while time.monotonic()<deadline:
+        with sqlite3.connect(database) as db:
+            rows=db.execute('SELECT id,metadata FROM webapps').fetchall()
+        second=next((row for row in rows if row[0]!=installed[0]),None)
+        if second:break
+        time.sleep(.1)
+    assert second,'Second app was not installed by the production installer'
+    second_metadata=json.loads(second[1])
+    assert second_metadata['name']=='Second Fixture App'
+    assert pathlib.Path(second_metadata['icon_path']).is_file()
+    assert (root/f'data/applications/com.majoris.browser.WebApp.{second[0]}.desktop').is_file()
+    second_application=subprocess.Popen([str(binary),'--app='+second[0]],env=app_env)
+    second_identity='com.majoris.browser.WebApp.'+second[0]
+    deadline=time.monotonic()+10
+    while second_identity not in x11_identities():
+        assert second_application.poll() is None and time.monotonic()<deadline,'Second app identity missing'
+        time.sleep(.1)
+    assert identity in x11_identities() and second_identity!=identity
     assert browser.wait(timeout=30)==0
     assert application.poll() is None, 'Installed app exited with Browser'
     assert application.wait(timeout=20)==0
+    assert second_application.wait(timeout=20)==0
+    restart_env=dict(env,MAJORIS_SMOKE_EXPECT_RESTART='1')
+    restarts=[subprocess.Popen([str(binary),'--app='+row[0]],env=restart_env) for row in (installed,second)]
+    for process in restarts:assert process.wait(timeout=20)==0
     with sqlite3.connect(root / 'data/majoris-browser/browser/browser.db') as db:
-        app_id, serialized = db.execute('SELECT id,metadata FROM webapps').fetchone()
+        app_id, serialized = db.execute('SELECT id,metadata FROM webapps WHERE id=?',(installed[0],)).fetchone()
     metadata=json.loads(serialized)
     assert metadata['name']=='Fixture App'
     assert metadata['start_url']==url

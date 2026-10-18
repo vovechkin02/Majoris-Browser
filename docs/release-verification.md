@@ -1,5 +1,9 @@
 # Release gate
 
+The latest pass adds release-critical download ownership checks. Confirm normal/app/private lists and every action stay in their own context, private metadata vanishes after the last session view closes, SQLite/restart contains no private record, and user files remain. Test software-opening confirmation with both risky and ordinary files; unknown safety must never appear as a safe verdict. The current build has no qualified URL/download reputation service; read security-maintenance.md before distribution.
+
+Expanded fixtures cover trusted username-first steps, editable/protected/Unicode AT-SPI text, two distinct installed apps and their restarted storage, real Wasm/WSS/local WebRTC, invalid TLS, SOP/file-fetch denial and renderer seccomp/no-new-privileges. The SDK's VP8/VP9/Opus capability does not imply H.264/AAC or DRM. HTTP/2/3, hardware capture, physical printer/file-dialog UX, screen reader actions, native Wayland and target theme remain independent manual/infrastructure gates. Retain the exact feature matrix and capability report with each release.
+
 Run the full Meson suite on Debian 13 with an explicitly bootstrapped SDK. Use a fresh source copy to exclude accidental generated-file dependencies:
 
 ```sh

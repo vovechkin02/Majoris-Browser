@@ -28,6 +28,16 @@ with tempfile.TemporaryDirectory(prefix='majoris-atspi-') as root:
                 check=next(n for n in nodes if n.get_name()=='Fixture checkbox' and n.get_role()==Atspi.Role.CHECK_BOX)
                 assert check.get_state_set().contains(Atspi.StateType.CHECKED)
                 assert 'Readable document text.' in names
+                multiline=next(n for n in nodes if n.get_name()=='Unicode multiline' and n.get_role()==Atspi.Role.TEXT)
+                actual_multiline=Atspi.Text.get_text(multiline.get_text_iface(),0,-1)
+                assert actual_multiline=='日本語😀 first\nSecond line',repr(actual_multiline)
+                assert Atspi.Text.get_text(multiline.get_text_iface(),3,4)=='😀'
+                editable=next(n for n in nodes if n.get_name()=='Editable fixture' and n.get_role()==Atspi.Role.TEXT)
+                actual_editable=Atspi.Text.get_text(editable.get_text_iface(),0,-1)
+                assert actual_editable=='Editable 日本語😀',repr(actual_editable)
+                protected=next(n for n in nodes if n.get_name()=='Protected fixture' and n.get_role() in (Atspi.Role.TEXT,Atspi.Role.PASSWORD_TEXT))
+                assert Atspi.Text.get_text(protected.get_text_iface(),0,-1)==''
+                assert all('never-expose-this' not in name for name in names)
                 bounds=Atspi.Component.get_extents(field,Atspi.CoordType.WINDOW);assert bounds.width>100 and bounds.height>10
                 deadline=time.monotonic()+10
                 while time.monotonic()<deadline:

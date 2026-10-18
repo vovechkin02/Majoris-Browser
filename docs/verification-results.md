@@ -1,5 +1,30 @@
 # Verification results — 18 October 2026
 
+## Latest hardening pass
+
+Both fresh-source hardening builds passed 20/20 suites, with no failures or skips (`build/final-hardening-clean.log`, then the final source snapshot in `build/final-hardening-clean-final.log`). Targeted production-service/GTK checks also passed (`build/final-hardening-regressions.log`). Earlier revision-2 artifacts do not include this work.
+
+Final source is `build-clean-hardening-final/source`, output `build-clean-hardening-final/output`. The native-Linux Debian build passed its exact 20/20 gate (`build/final-hardening-package.log`). The development artifacts in `build-packages-hardening-final/` include:
+
+- `majoris-browser_0.1.0-3_amd64.deb`, 251,251,516 bytes; SHA-256 `44457ed07bc92d43da36cf45be3fd2be318dbd120da6d2df0f21f2cc95ea0644`.
+- Debug symbols, `.buildinfo`, `.changes`, artifact `SHA256SUMS`, frozen-source `SOURCE-SHA256SUMS` and `SOURCE-REVISION.txt`. Base Git revision is `cfa4952b3e2112abdbfe92c4495fb393d67b7ca3` plus this uncommitted worktree implementation.
+
+Archive ownership, mode-4755 sandbox, resources/notices, installed ELF lookup and extracted GTK/CEF tests passed (`build/final-hardening-deb-runtime.log`), including both application identities and storage restarts. Desktop-file/AppStream validation passed (`build/final-hardening-metadata.log`), as did `git diff --check`. No system installation or upgrade was performed. Only documentation of these results was added after the tested source snapshot.
+
+**Release blocked:** the [15 October Chrome advisory](https://chromereleases.googleblog.com/2026/10/extended-stable-update-for-desktop_01598036246.html) announces newer `.169` security fixes. The CEF Linux publisher index checked in this pass still lists `.167` as its newest M152 stable artifact. Linux applicability/backports and a fixed production CEF SDK are unresolved; a beta or unsupported branch was not substituted. Read security-maintenance.md. The artifact is for development qualification, not approved distribution.
+
+New executed assertions include normal/private streamed downloads with wrong-context cancel/remove/retry refusal, session-scoped clear-completed, last-private-view cleanup, persistent-record reload and retained file bytes; trusted username-first fill/submit followed by a password step with no visible username; actual non-atomic editable AX descendants, multiline Japanese/emoji text and suppressed protected values; two generated launchers/icons and concurrent distinct X11 identities, followed by separate app-process restarts and retained owner-specific storage.
+
+The platform fixture performs real Wasm execution (42), a WSS frame exchange, local WebRTC data-channel negotiation/message delivery, contenteditable, foreign-frame SOP denial, file URL fetch denial and absence of the isolated native binding from page JavaScript. It then terminates the renderer and rejects a separate untrusted TLS endpoint, asserting certificate failure metadata. Its runner observes renderer `Seccomp: 2` and `NoNewPrivs: 1` and refuses unsafe sandbox/web-security switches. The actual capability report was:
+
+```json
+{"wasm":true,"websocket":true,"rtc":true,"fileDenied":true,"sop":true,"edit":true,"nativeHidden":true,"codecs":{"vp8":"probably","vp9":"probably","h264":"","opus":"probably","aac":""},"widevine":false}
+```
+
+Codec results are Chromium capability queries, not playback certification for arbitrary media. Running/suspended WebAudio and silent canvas-video playback are also exercised. H.264/AAC and Widevine are unavailable in this build; HTTP/2/3 negotiation, physical camera/microphone capture and provider media/DRM remain unverified. Existing storage/notification/drag suites cover workers, IndexedDB, Cache Storage, restart, notification delivery, actual clipboard/input and inbound local files. Native upload-dialog and full-screen desktop UX still require manual qualification.
+
+No maintained URL reputation provider or download malware scanner is configured. Downloads show **not assessed**, software-opening confirmation is implemented, and CEF interruption/security-block/check-failure reasons remain distinct. Risk classification and scoped actions are automated; complete confirmation-dialog UX is not claimed tested. This, the unresolved upstream security delta, full AT interaction and the already-agreed native desktop/account gates prevent a production-ready claim.
+
 Environment: Debian 13 under WSL on Windows; Vala 0.56.18, GTK 4.18.6, libadwaita 1.7.6, Meson 1.7.0, GCC 14.2.0 and libpsl 0.21.2. Engine: CEF 152.0.14+g8a0b5b9 / Chromium 152.0.7977.167, Linux x86-64. Sandboxing remained enabled. These are development results, not release approval.
 
 The expanded workspace run passed **20 suites, 0 failures, 0 skipped** (`build/audit-final-tests.log`). Subsequent targeted checks also passed for retained Task Manager metrics/actual renderer termination (`build/audit-task.log`), dynamic AT-SPI geometry (`build/audit-geometry.log`) printing cancellation/PDF paper dimensions, and actual Browser/app WM_CLASS identity (`build/audit-identity.log`). Fresh-source and package verification use these final sources and the exact required set below.
@@ -33,11 +58,11 @@ Important defects discovered by runtime verification were corrected before quali
 
 ## Remaining qualification
 
-The user confirmed no Majoris desktop is available. Authenticated Google Sheets/Microsoft, dock/Alt+Tab grouping, two distinct real installed apps, native Wayland/IME/scaling, Majoris Theme, full Orca/braille interaction, PolicyKit/locked-keyring UI, physical printer/backend/copies/ranges, PDF-viewer print UI and real system installation/upgrade remain unverified. Complex AX transforms/cross-frame character geometry and direct AX action/edit dispatch are not claimed. Audio activity is not sample-accurate silence detection. PiP is a verified CEF Alloy OSR limitation, not an untested promise.
+The user confirmed no Majoris desktop is available. Authenticated Google Sheets/Microsoft, dock/Alt+Tab grouping, two apps on the native Majoris desktop, native Wayland/IME/scaling, Majoris Theme, full Orca/braille interaction, PolicyKit/locked-keyring UI, physical printer/backend/copies/ranges, PDF-viewer print UI and real system installation/upgrade remain unverified. Complex AX transforms/cross-frame character geometry and direct AX action/edit dispatch are not claimed. Audio activity is not sample-accurate silence detection. PiP is a verified CEF Alloy OSR limitation, not an untested promise.
 
 See `implementation-status.md` for the complete implemented/tested, unverified, partial, upstream-limited and intentionally unimplemented matrix. Do not interpret fixture success as production readiness.
 
-## Final build and package record
+## Previous revision 0.1.0-2 build and package record (superseded by the latest hardening pass)
 
 The final fresh-source directory is `build-clean-release-final/source`, with build output in `build-clean-release-final/output`. Its initial parallel run exposed a compositor-hit-test race in the authentication test's synthetic pointer trigger. After adding an acknowledged trusted-click wait, the auth fixture passed three consecutive runs (`build/release-auth-repeated.log`). The test source was refreshed and rebuilt in that clean directory, then **all 20 suites passed, 0 failed, 0 skipped** (`build/release-clean-final-tests.log`). Initial and subsequent TLS navigation UA/Client Hints assertions also passed (`build/release-headers.log`). This was a test synchronization fix; no production code changed after the final package source snapshot.
 

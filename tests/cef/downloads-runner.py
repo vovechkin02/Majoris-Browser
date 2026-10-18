@@ -21,4 +21,5 @@ server=http.server.ThreadingHTTPServer(('127.0.0.1',0),Handler)
 threading.Thread(target=server.serve_forever,daemon=True).start()
 with tempfile.TemporaryDirectory(prefix='majoris-download-test-') as root:
     subprocess.run([*sys.argv[1:],root,f'http://127.0.0.1:{server.server_port}/download'],check=True,timeout=35)
+    subprocess.run([sys.argv[1],'--verify-store',root],check=True,timeout=10)
 server.shutdown()

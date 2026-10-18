@@ -1,5 +1,7 @@
 # Majoris Browser
 
+The latest hardening pass isolates private download visibility and controls by session, adds explicit unassessed-download cautions, supports trusted username-first login steps, and improves editable/protected AX text. Local fixtures cover two installed application identities, WebAssembly, secure WebSockets, local WebRTC and sandbox/TLS boundaries. The bundled SDK reports VP8/VP9/Opus capability; H.264/AAC and Widevine are unavailable in the tested build. HTTP/2/3, physical camera/microphone and commercial provider compatibility remain unqualified. See the [feature matrix](docs/implementation-status.md) and [verification record](docs/verification-results.md).
+
 GTK4/libadwaita browser and isolated web-application runtime, written primarily in Vala with a C++ CEF bridge. Application identity: `com.majoris.browser`; executable: `majoris-browser`.
 
 **Development implementation, not a release-complete daily-driver browser.** See [implementation status](docs/implementation-status.md) for unfinished requirements and verification limits. Passing the current tests does not establish completion of the supplied product specification.

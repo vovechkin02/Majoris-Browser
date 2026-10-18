@@ -13,6 +13,9 @@ NAME = f'cef_binary_{VERSION}_linux64_minimal.tar.bz2'
 # Publisher currently supplies SHA-1. This verifies corruption against a pinned
 # digest; it is not a claim that SHA-1 is a modern signature mechanism.
 SHA1 = '007ef6e820f2391d63845329e4ca186eec847905'
+# Independently pinned repository digest of the qualified archive. This adds
+# collision-resistant integrity checking, not a publisher signature.
+SHA256 = '25cf8c95532060fda22c2f85de2e71ba0e0166d344e6741e0062935653efa94f'
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -27,10 +30,12 @@ def main():
         urllib.request.urlretrieve('https://cef-builds.spotifycdn.com/' + NAME, partial)
         partial.rename(archive)
     digest = hashlib.sha1()
+    strong_digest = hashlib.sha256()
     with archive.open('rb') as stream:
         for chunk in iter(lambda: stream.read(1024 * 1024), b''):
             digest.update(chunk)
-    if digest.hexdigest() != SHA1:
+            strong_digest.update(chunk)
+    if digest.hexdigest() != SHA1 or strong_digest.hexdigest() != SHA256:
         raise SystemExit('CEF checksum mismatch: remove sdk.tar.bz2 and retry')
     with tarfile.open(archive) as tar:
         # Extract the verified distribution beneath its own directory first.

@@ -11,6 +11,7 @@ namespace MajorisBrowser {
             try {
                 surface = engine==null?new OffscreenBrowserSurface (app.paths.webapp_context (metadata.id),false,initial_url??metadata.start_url,metadata.scope,app.permissions.serialized()):new OffscreenBrowserSurface.with_engine(engine);
                 app.permissions.attach(surface.engine);
+                app.downloads.attach(surface.engine);
                 surface.engine.popup.connect((child,background,url,new_window)=>{
                     try{if(new WebAppNavigationPolicy(metadata.scope).classify(url)==NavigationDecision.APP_SCOPE || child.is_auth_popup())new WebAppWindow(app,metadata,child).present();else{child.close();app.open_external(url);}}catch(Error e){child.close();EngineDialogs.show_error(this,e.message);}
                 });
@@ -18,6 +19,16 @@ namespace MajorisBrowser {
                 new CredentialController(app,surface,metadata.id);
                 PageActions.attach(surface);
                 new AddressController(app,surface);
+                if(Environment.get_variable("MAJORIS_UI_SMOKE")=="1"){
+                    bool checked_storage=false,verified_storage=false;
+                    close_request.connect(()=>{assert(verified_storage);return false;});
+                    surface.changed.connect((kind,value)=>{
+                        if(kind=="loading" && value=="0" && !checked_storage){checked_storage=true;bool restart=Environment.get_variable("MAJORIS_SMOKE_EXPECT_RESTART")=="1";
+                            surface.engine.evaluate("(()=>{const key='majoris-installed-app-owner',before=localStorage.getItem(key),id='"+metadata.id+"';if(before!=="+(restart?"id":"null")+")return 'wrong-owner';localStorage.setItem(key,id);return 'storage-owner-ok';})()");
+                        }
+                        if(kind=="evaluation"){assert(value.contains("storage-owner-ok"));verified_storage=true;}
+                    });
+                }
                 foreach(string name in new string[]{"reload","back","forward","print","save-pdf","save-page","devtools"}){string command=name;var action=new SimpleAction(name,null);action.activate.connect(()=>surface.engine.command(command));add_action(action);}
                 app.set_accels_for_action("win.devtools",{"F12","<Control><Shift>i"});app.set_accels_for_action("win.reload",{"<Control>r"});app.set_accels_for_action("win.print",{"<Control>p"});app.set_accels_for_action("win.cancel-sign-in",{"Escape"});
                 var downloads=new SimpleAction("downloads",null);downloads.activate.connect(()=>new DownloadsDialog(app,surface.engine).present(this));add_action(downloads);

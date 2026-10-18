@@ -179,6 +179,9 @@ class Client : public CefClient, public CefLifeSpanHandler, public CefRenderHand
   std::set<std::string> credential_frames;
   std::string credential_main_frame;
   uint64_t credential_generation=0,candidate_generation=0;
+  std::string step_username,step_origin,step_frame;
+  int64_t step_deadline=0;
+  void clear_username_step(){std::fill(step_username.begin(),step_username.end(),'\0');step_username.clear();step_origin.clear();step_frame.clear();step_deadline=0;}
   std::string candidate_id,candidate_origin,candidate_frame,candidate_action;
   int candidate_context=0;
   gint64 candidate_at=0;
@@ -337,11 +340,18 @@ class Client : public CefClient, public CefLifeSpanHandler, public CefRenderHand
       auto parsed=CefParseJSON(std::string(static_cast<const char*>(params),size),JSON_PARSER_RFC);if(!parsed || parsed->GetType()!=VTYPE_DICTIONARY)return;auto data=parsed->GetDictionary();int context=data->GetInt("executionContextId");auto found=credential_contexts.find(context);
       if(data->GetString("name")!="majorisCredentialSubmit" || found==credential_contexts.end() || !browser || origin(browser->GetMainFrame()->GetURL())!=credential_origin || found->second.origin!=credential_origin || data->GetString("payload").length()>24576)return;
       auto payload=CefParseJSON(data->GetString("payload"),JSON_PARSER_RFC);if(!payload || payload->GetType()!=VTYPE_DICTIONARY)return;auto value=payload->GetDictionary();auto kind=value->GetString("kind");
+      if(kind=="username-step"){
+        auto name=value->GetString("username").ToString();if(name.empty() || name.size()>1024)return;
+        clear_username_step();step_username=name;step_origin=credential_origin;step_frame=found->second.frame_id;step_deadline=g_get_monotonic_time()+60*G_USEC_PER_SEC;
+        auto deadline=step_deadline;CefRefPtr<Client> keep=this;CefPostDelayedTask(TID_UI,new Task([keep,deadline]{if(keep->step_deadline==deadline)keep->clear_username_step();}),60000);return;
+      }
       if(kind=="form"){event("credential-form",credential_origin);return;}
       if(kind=="address"){auto safe=CefDictionaryValue::Create();safe->SetString("origin",credential_origin);safe->SetInt("context",context);auto result=CefValue::Create();result->SetDictionary(safe);event("address-offer",CefWriteJSON(result,JSON_WRITER_DEFAULT).ToString());return;}
       if(kind=="outcome"){if(candidate_alive() && value->GetString("id")==candidate_id && context==candidate_context){candidate_dom=true;event("credential-progress","dom-outcome");if(candidate_network)complete_candidate();}return;}
       if(kind!="submit" || value->GetString("id").empty() || value->GetString("id").length()>128 || value->GetString("password").empty() || value->GetString("password").length()>4096 || value->GetString("username").length()>1024)return;
       std::string action=value->GetString("action");if(action.size()>8192 || (!action.empty() && origin(action)!=credential_origin))return;
+      if(value->GetString("username").empty() && step_origin==credential_origin && step_frame==found->second.frame_id && g_get_monotonic_time()<step_deadline)value->SetString("username",step_username);
+      clear_username_step();
       candidate_id=value->GetString("id");candidate_origin=credential_origin;candidate_frame=found->second.frame_id;candidate_context=context;candidate_generation=credential_generation;candidate_action=action;candidate_at=g_get_monotonic_time();candidate_requests.clear();candidate_network=candidate_dom=false;
       value->SetString("origin",credential_origin);event("credential-submit",CefWriteJSON(payload,JSON_WRITER_DEFAULT).ToString());return;
     }
@@ -444,7 +454,7 @@ class Client : public CefClient, public CefLifeSpanHandler, public CefRenderHand
   }
   bool DoClose(CefRefPtr<CefBrowser>) override {closing=true;return false;}
   void OnBeforeClose(CefRefPtr<CefBrowser>) override {
-    cancel_candidate();credential_contexts.clear();credential_frames.clear();
+    clear_username_step();cancel_candidate();credential_contexts.clear();credential_frames.clear();
     revoke_auth("window-closed");
     end_drag(-1,-1,DRAG_OPERATION_NONE);
     for(auto &site:temporary_permission_origins)apply_permissions(site);temporary_permission_origins.clear();
@@ -539,7 +549,7 @@ class Client : public CefClient, public CefLifeSpanHandler, public CefRenderHand
   bool OnCursorChange(CefRefPtr<CefBrowser>,CefCursorHandle,cef_cursor_type_t type,const CefCursorInfo&) override {
     event("cursor",type==CT_HAND?"pointer":type==CT_IBEAM?"text":type==CT_WAIT?"wait":type==CT_CROSS?"crosshair":"default");return true;
   }
-  void OnAddressChange(CefRefPtr<CefBrowser>,CefRefPtr<CefFrame> f,const CefString &s) override { if(f->IsMain()){if(candidate_alive() && origin(s)!=candidate_origin)cancel_candidate();event("url",s.ToString());} }
+  void OnAddressChange(CefRefPtr<CefBrowser>,CefRefPtr<CefFrame> f,const CefString &s) override { if(f->IsMain()){if(origin(s)!=step_origin)clear_username_step();if(candidate_alive() && origin(s)!=candidate_origin)cancel_candidate();event("url",s.ToString());} }
   void OnLoadStart(CefRefPtr<CefBrowser>,CefRefPtr<CefFrame> frame,cef_transition_type_t) override {
     if(!frame->IsMain())return;
     media_players.clear();audio_players.clear();audio_contexts.clear();emit_audio();++context_generation;context_source.clear();
@@ -600,7 +610,9 @@ class Client : public CefClient, public CefLifeSpanHandler, public CefRenderHand
   void OnDownloadUpdated(CefRefPtr<CefBrowser>,CefRefPtr<CefDownloadItem> d,CefRefPtr<CefDownloadItemCallback> callback) override {
     if(d->IsInProgress())downloads[d->GetId()]=callback;else downloads.erase(d->GetId());
     auto item=CefDictionaryValue::Create();item->SetInt("id",d->GetId());item->SetString("source",d->GetURL());item->SetString("path",d->GetFullPath());
-    item->SetString("status",d->IsComplete()?"complete":d->IsCanceled()?"cancelled":d->IsInterrupted()?"failed":d->IsPaused()?"paused":"active");
+    auto reason=d->GetInterruptReason();
+    bool blocked=reason==CEF_DOWNLOAD_INTERRUPT_REASON_FILE_VIRUS_INFECTED || reason==CEF_DOWNLOAD_INTERRUPT_REASON_FILE_BLOCKED;
+    item->SetString("status",d->IsComplete()?"complete":d->IsCanceled()?"cancelled":d->IsInterrupted()?(blocked?"security-blocked":reason==CEF_DOWNLOAD_INTERRUPT_REASON_FILE_SECURITY_CHECK_FAILED?"security-check-failed":"interrupted"):d->IsPaused()?"paused":"active");
     item->SetDouble("received",d->GetReceivedBytes());item->SetDouble("total",d->GetTotalBytes());item->SetDouble("speed",d->GetCurrentSpeed());item->SetString("error",d->IsInterrupted()?std::to_string(d->GetInterruptReason()):"");auto value=CefValue::Create();value->SetDictionary(item);event("download",CefWriteJSON(value,JSON_WRITER_DEFAULT).ToString());
   }
   bool OnShowPermissionPrompt(CefRefPtr<CefBrowser>,uint64_t prompt_id,const CefString &origin,uint32_t permissions,CefRefPtr<CefPermissionPromptCallback> cb) override {
@@ -737,6 +749,7 @@ gboolean mc_runtime_initialize(const char *root,const char *helper,const char *r
   int process_result=CefExecuteProcess(args,nullptr,nullptr);
   if(process_result>=0){majoris_profile_release(profile_lock);profile_lock=-1;g_set_error_literal(error,g_quark_from_static_string("majoris-cef"),2,"Unexpected subprocess invocation");return false;}
   settings.multi_threaded_message_loop=true;settings.windowless_rendering_enabled=true;
+  settings.no_sandbox=false;settings.command_line_args_disabled=true;
   settings.persist_session_cookies=true;
   CefString(&settings.root_cache_path)=root;
   CefString(&settings.browser_subprocess_path)=helper;

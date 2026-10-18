@@ -29,9 +29,10 @@ namespace MajorisBrowser {
         private Gtk.Revealer find_bar = new Gtk.Revealer ();
         private string window_id = Uuid.string_random ();
         private BrowserSurface? selected { get { return tabs.selected_page == null ? null : tabs.selected_page.child as BrowserSurface; } }
-        public BrowserWindow (Application app,bool is_private,bool initial_tab = true) {
+        public BrowserWindow (Application app,bool is_private,bool initial_tab = true,string private_session="") {
             Object (application:app,title:is_private ? _("Private Browser") : _("Browser"),default_width:1200,default_height:800);
             this.app=app; this.is_private=is_private;
+            if(is_private && private_session!="")window_id=private_session;
             app.cancel_exit();
             omnibox=new Omnibox(address,app,()=>{var result=new Gee.ArrayList<Record>();for(int i=0;i<tabs.n_pages;i++){var surface=tabs.get_nth_page(i).child as BrowserSurface;result.add(new Record(i,surface.url,surface.page_title));}return result;});
             omnibox.accepted.connect((url)=>{for(int i=0;i<tabs.n_pages;i++){var page=tabs.get_nth_page(i);if(((BrowserSurface)page.child).url==url){tabs.selected_page=page;return;}}if(selected!=null)selected.navigate(url);});
@@ -43,7 +44,6 @@ namespace MajorisBrowser {
             string[,] entries = {{"New Tab","new-tab"},{"New Window","new-window"},{"Private Window","private"},{"Duplicate Tab","duplicate"},{"Pin / Unpin Tab","pin"},{"Reopen Closed Tab","reopen"},{"Bookmarks","bookmarks"},{"History","history"},{"Downloads","downloads"},{"Find in Page","find"},{"Install as App…","install-app"},{"Settings","settings"},{"Task Manager","tasks"},{"Developer Tools","devtools"},{"About Browser","about"}};
             for (int i=0;i<entries.length[0];i++) menu.append (_(entries[i,0]),"win."+entries[i,1]);
             menu.append(_("Save Page…"),"win.save-page");menu.append(_("Save as PDF…"),"win.save-pdf");menu.append(_("Fill Address…"),"win.fill-address");menu.append(_("Quit Browser"),"win.quit");
-            menu.append(_("Picture in Picture"),"win.picture-in-picture");
             var menu_button = new Gtk.MenuButton (); menu_button.icon_name="open-menu-symbolic"; menu_button.menu_model=menu; header.pack_end (menu_button); layout.add_top_bar (header);
             var bar = new Adw.TabBar (); bar.view=tabs; layout.add_top_bar (bar);
             var tab_menu=new Menu();foreach(string name in new string[]{"duplicate","pin","move-window","close-others","close-right","close-tab"})tab_menu.append(name,"win."+name);tabs.menu_model=tab_menu;
@@ -146,7 +146,7 @@ namespace MajorisBrowser {
             action("reopen",{"<Control><Shift>t"},() => {if(closed.size>0){var state=closed.remove_at(closed.size-1);add_tab(state.url);tabs.set_page_pinned(tabs.selected_page,state.pinned);}});
             action("duplicate",{},() => {if(selected!=null)add_tab(selected.url);});
             action("tab-search",{"<Control><Shift>a"},tab_search);
-            action("move-window",{},()=>{if(tabs.selected_page==null)return;var window=new BrowserWindow(app,is_private,false);tabs.transfer_page(tabs.selected_page,window.tabs,0);window.present();if(tabs.n_pages==0)close();});
+            action("move-window",{},()=>{if(tabs.selected_page==null)return;var window=new BrowserWindow(app,is_private,false,window_id);tabs.transfer_page(tabs.selected_page,window.tabs,0);window.present();if(tabs.n_pages==0)close();});
             action("close-others",{},()=>{if(tabs.selected_page!=null)tabs.close_other_pages(tabs.selected_page);});
             action("close-right",{},()=>{if(tabs.selected_page!=null)tabs.close_pages_after(tabs.selected_page);});
             action("pin",{},() => {if(tabs.selected_page!=null)tabs.set_page_pinned(tabs.selected_page,!tabs.selected_page.pinned);});
@@ -184,6 +184,7 @@ namespace MajorisBrowser {
             add_surface(new OffscreenBrowserSurface(is_private?window_id:app.paths.browser_context,is_private,url,"",is_private?"[]":app.permissions.serialized()),background);
         }
         private void add_surface(BrowserSurface surface,bool background=false){
+            app.downloads.attach(surface.engine,is_private?window_id:"");
             app.permissions.attach(surface.engine,is_private);
             var page=tabs.append(surface);page.title=_("New Tab");if(!background)tabs.selected_page=page;
             page.notify["pinned"].connect(()=>app.sessions.changed());
@@ -192,7 +193,7 @@ namespace MajorisBrowser {
             new AddressController(app,surface);
             if(!is_private)new CredentialController(app,surface,"browser");
             surface.changed.connect((kind,value)=>{var owner=surface.get_root() as BrowserWindow;if(owner!=null)owner.surface_event(page,surface,kind,value);});
-            surface.engine.popup.connect((child,background,url,new_window)=>{var owner=surface.get_root() as BrowserWindow;if(owner==null || owner.window_closing){child.close();return;}if(new_window){var window=new BrowserWindow(app,is_private,false);window.add_surface(new OffscreenBrowserSurface.with_engine(child));window.present();}else owner.add_surface(new OffscreenBrowserSurface.with_engine(child),background);});
+            surface.engine.popup.connect((child,background,url,new_window)=>{var owner=surface.get_root() as BrowserWindow;if(owner==null || owner.window_closing){child.close();return;}if(new_window){var window=new BrowserWindow(app,is_private,false,window_id);window.add_surface(new OffscreenBrowserSurface.with_engine(child));window.present();}else owner.add_surface(new OffscreenBrowserSurface.with_engine(child),background);});
         }
         private void surface_event(Adw.TabPage page,BrowserSurface surface,string kind,string value){
                 if(window_closing)return;
@@ -304,7 +305,7 @@ namespace MajorisBrowser {
             };
             search.search_changed.connect(()=>refresh());refresh();dialog.present(this);
         }
-        private void show_downloads () { new DownloadsDialog(app,selected==null?null:selected.engine).present(this); }
+        private void show_downloads () { new DownloadsDialog(app,selected==null?null:selected.engine,is_private?window_id:"").present(this); }
         private void install_app () {
             if(selected!=null)selected.engine.command("source-metadata");
         }
@@ -372,7 +373,9 @@ namespace MajorisBrowser {
                     case 1:
                         var install=visible_dialog as Adw.AlertDialog;
                         if(install==null){stage--;return Source.CONTINUE;}install.response("install");break;
-                    case 2: new PreferencesWindow(app).present(this);break;
+                    case 2:
+                        try{string fixture=Environment.get_variable("MAJORIS_UI_FIXTURE") ?? "about:blank";var second_app=new WebApp("Second Fixture App",UrlResolver.origin(fixture)+"/second-app/index.html",UrlResolver.origin(fixture)+"/second-app/");app.storage.run((store)=>WebAppInstaller.install(store,second_app,Environment.get_user_data_dir()));}catch(Error e){error("Second fixture install: %s",e.message);}
+                        new PreferencesWindow(app).present(this);break;
                     case 3: show_records(false);break;
                     case 4: show_downloads();break;
                     case 5: if(selected!=null)new TaskManager(app,selected.engine).present();break;

@@ -1,5 +1,13 @@
 # Architecture and engine contract
 
+DownloadService registers every engine with an in-memory private-session key (empty for persistent contexts). Records carry a profile and ephemeral session owner; listing, retry, pause/resume/cancel, remove and clear-completed enforce that owner. Independent private windows have independent contexts. Transferred tabs and opener-created windows retain the original key. Closing a hosting page cancels its active transfers; completed metadata survives while another view owns that session, then disappears at the last close. Cleanup never deletes downloaded files. Private keys never enter serialized metadata.
+
+Downloads report security as not assessed. Suffix/executable-bit cautions control confirmation before opening; they are not malware verdicts. Native CEF reasons distinguish interruption, security/policy blocking and failed security checks. Completed downloads never execute automatically.
+
+Username-first capture requires trusted activated semantic submissions in valid HTTPS isolated worlds. Native memory retains a bounded username for 60 seconds, tied to origin/frame, and consumes it only for a later password submission. Origin change/closure wipe it. Autofill can fill a visible username step without submitting or placing a password in a non-password field. Existing success qualification and never-save/origin checks still apply.
+
+Non-atomic editable AX text comes from actual serialized staticText/lineBreak descendants. Parent linking precedes text publication so protected ancestors suppress descendant text. Unsupported transforms remain unknown; supported fractional rectangles round outward.
+
 The GTK/Vala layer owns windows and product UI. `BrowserSurface` isolates the GTK product from the rendering implementation. `OffscreenBrowserSurface` transfers BGRA frames to GDK memory textures and forwards input to CEF. Native window hosting is not implemented yet; no X11 window handle enters the Vala application.
 
 `libmajoris-cef` exposes a GObject-based C ABI and a Vala VAPI. Only `mc_*` symbols are exported: Chromium and wrapper C++ implementation symbols must not interpose on each other. Hosts link libcef directly (retained with `--no-as-needed`) so Chromium's libc interposition can resolve symbols in the correct order.

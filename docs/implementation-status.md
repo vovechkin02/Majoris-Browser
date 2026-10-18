@@ -1,5 +1,25 @@
 # Completion matrix — 18 October 2026
 
+## Final hardening qualification
+
+| Feature | Implemented | Tested | Remaining limitations |
+|---|---|---|---|
+| Private download isolation | Yes, profile/session ownership in listing and actions | Real normal/private streaming, wrong-context controls, last-session-view cleanup, SQLite reload and file retention | Native download dialogs need desktop interaction qualification |
+| Browser security | Sandbox/TLS/origin defaults, certificate denial, isolated bindings, scoped permissions/profiles | Renderer seccomp/no-new-privileges, invalid TLS, SOP, file-fetch denial, binding invisibility and isolation suites | No qualified URL reputation service; upstream .169 security delta versus latest CEF .167 is an unresolved release blocker |
+| Download protection | Unassessed state, risky-file open confirmation, interruption/security-block distinctions | Real downloads, scope enforcement and executable/ordinary filename classification | No malware/reputation verdict; confirmation UI unverified; filename cautions are not maliciousness judgments |
+| Password management | Secret Service, save/update/never-save, trusted username-first steps | Conventional/dynamic/formless/change/frame/failed/multi-step fixtures and multiple stored logins | Unknown SPA success uses explicit Site Password action; closed shadow DOM and complete chooser/PolicyKit/locked-keyring UX unverified |
+| Accessibility | AX-to-AT-SPI trees/text/focus, non-atomic editable text, Unicode, protected descendants, fractional bounds | Independent AT-SPI: input, multiline, emoji, contenteditable, protected values, frames, live changes and geometry | No public pinned OSR AX action dispatch; complex transforms/frame/character geometry unknown; Orca/braille unverified |
+| Picture-in-Picture | Explicit unsupported result; unavailable menu item removed | Real OSR refusal; upstream Alloy still rejects windowless PiP | Blocked upstream; no fake detached video |
+| Session restore | Normal windows/tabs/URL/order/pin/active/geometry | Snapshot/private exclusion and GTK lifecycle | CEF exports entries but cannot import a serialized stack; no login/POST replay |
+| Browser Task Manager | Native metrics/types/association/termination | Retained observer and actual renderer termination | No trusted public PID/network/parent mapping |
+| Web-app installation | Minimal windows, generated launchers/icons, separate GTK identities | Two installed local fixtures concurrent with Browser, distinct X11 WM_CLASS | Majoris dock/pinning/Alt+Tab/theme unverified |
+| Web-app storage isolation | Independent persistent contexts and profile leases | Cookies, CHIPS, localStorage, IndexedDB, Cache Storage, workers/cache, restart and clearing | Real authenticated Sheets persistence unverified |
+| Web-app authentication | App-owned OAuth transactions, real opener/popup, consented origins | Local TLS provider: delayed popup, state/return, expiry, cross-app refusal | Real Google/Microsoft policies/accounts unverified; no bypass |
+| Wayland integration | GDK OSR input/drag/IME/scale paths | X11 fixtures and direct Unicode CEF commit | No native Majoris desktop; Wayland/IME candidate UI/scaling/drag/dock are manual gates |
+| Debian packaging | Revision 0.1.0-3, explicit SDK pin/checksums, hardened workflow | Fresh source 20/20; package 20/20; archive/extracted-runtime/metadata passed | Development artifact only: security/reputation and desktop gates block production qualification; system installation/upgrade unverified |
+
+This table supersedes older qualification statements below where this pass expanded coverage. Unresolved release gates remain open.
+
 This is a development build. Automated fixture results qualify the tested paths, not production readiness or third-party account compatibility. The user confirmed that a Majoris desktop is unavailable; the account, dock and native Wayland gates below remain unverified.
 
 | Requirement | Status | Implementation and evidence / precise limit |
@@ -29,7 +49,7 @@ This is a development build. Automated fixture results qualify the tested paths,
 | Printing and export | Implemented and tested at engine boundary | Toolbar/JS print setup cancellation, retry, pending-page closure, selected Letter landscape PDF MediaBox, rejected/acknowledged jobs and reset. Accepted setup cancels CEF's crashing print-driver route, generates bounded PDF with CDP, then GTK PrintDialog submits the file. Physical printing, copies/ranges/backend errors and PDF-viewer UI require desktop/printer qualification. PDF/MHTML export remains tested. |
 | Picture-in-Picture | Blocked by verified upstream limitation | CEF Alloy explicitly returns false for windowless PiP support. A live request remained pending; action is now disabled in Browser, omitted from context menus, and direct requests report unavailable immediately. No engine rewrite or fake detached video is supplied. |
 | Task Manager | Implemented and tested for supported metrics | Retained CEF observer, correct task-type mapping, CPU/memory/GPU memory with unknown/aggregate handling, current-page association, sorting and supported termination. PID/network/explicit parent IDs are absent from CefTaskInfo; no guessed values. |
-| Desktop identities, icons, notifications | Implemented and fixture-tested | Distinct X11 WM_CLASS values matching desktop entries, generated icons, process identity/resource name and native Chromium D-Bus web notifications. Browser/app concurrent lifetime and notification click/close tested. Two distinct installed apps, dock pin/grouping, Alt+Tab and Majoris Theme presentation remain unverified on the real desktop. |
+| Desktop identities, icons, notifications | Implemented and fixture-tested | Distinct X11 WM_CLASS values matching desktop entries, generated icons, process identity/resource name and native Chromium D-Bus web notifications. Browser/app concurrent lifetime and notification click/close tested. Two installed local apps and restarted storage are fixture-tested; dock pin/grouping, Alt+Tab and Majoris Theme presentation remain unverified on the real desktop. |
 | UA and UA-CH | Implemented and tested | Linked engine version and Majoris brand in renderer UA, brands/high-entropy metadata and actual HTTP Client Hints headers. No provider bypass. |
 | Packaging and fresh-source builds | Implemented and tested | Clean source and hardened package: 20/20 suites; extracted runtime and metadata validation passed. GTK minimum 4.18, libpsl, AT-SPI and XTest test prerequisites; package revision 0.1.0-2; package verifier requires all 20 suites. Native installation/upgrade is a separate manual gate. |
 | Excluded product scope | Not implemented, as requested | Rewards/wallet/VPN/Tor/cloud sync/Chrome Web Store/AI/advanced farbling and a closed-app push daemon remain excluded. |
