@@ -1,0 +1,5 @@
+<!doctype html><meta charset="utf-8"><title>Drag fixture</title>
+<a href="/drag-link" draggable="true" style="position:fixed;left:10px;top:10px;width:150px;height:50px;display:block">Drag fixture link</a>
+<img src="/drag-image.png" draggable="true" style="position:fixed;left:300px;top:10px;width:64px;height:64px">
+<div id="drop" style="position:fixed;left:10px;top:100px;width:380px;height:150px;background:#ddd" ondragover="event.preventDefault()" ondrop="event.preventDefault();event.dataTransfer.files[0].text().then(text=>{if(text==='majoris upload fixture')document.title='inbound-ok';})">Drop a local file here</div>
+<input id="keyboard" style="position:fixed;left:10px;top:260px;width:350px;height:30px" oninput="if(this.value==='日本語😀 clipboard')document.title='clipboard-ok';if(this.value==='abc'){window.typed=true;document.title='typed-ok';}if(window.typed &amp;&amp; this.value==='ab')document.title='edited-ok'">

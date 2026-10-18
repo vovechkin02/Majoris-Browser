@@ -1,0 +1,14 @@
+<!doctype html><meta charset="utf-8"><title>Modern login fixture</title><main id="container"></main>
+<script>
+const mode=new URLSearchParams(location.search).get('mode')||'async',container=document.getElementById('container');
+if(mode==='frames'){
+ const same=document.createElement('iframe');same.id='same';same.src='/modern-login.html?mode=frame-child';same.style='position:fixed;left:0;top:100px;width:350px;height:200px;border:0';container.append(same);
+ const other=document.createElement('iframe');other.src=`https://127.0.0.1:${location.port}/modern-login.html?mode=cross`;other.style='position:fixed;left:400px;top:100px;width:350px;height:200px;border:0';container.append(other);
+ window.verifyCross=()=>new Promise(resolve=>{const nonce=crypto.randomUUID();const receive=e=>{if(e.origin===`https://127.0.0.1:${location.port}`&&e.source===other.contentWindow&&e.data.nonce===nonce){window.removeEventListener('message',receive);resolve(e.data.empty===true);}};window.addEventListener('message',receive);other.contentWindow.postMessage({nonce},`https://127.0.0.1:${location.port}`);setTimeout(()=>resolve(false),2000);});
+}else setTimeout(()=>{
+ const form=mode==='formless'||mode==='frame-child'||mode==='cross'?document.createElement('div'):document.createElement('form');form.setAttribute('role','dialog');form.innerHTML='<input id="username" autocomplete="username"><input id="password" type="password" autocomplete="current-password">'+(mode==='change'?'<input id="new" type="password" autocomplete="new-password"><input id="confirm" type="password" autocomplete="new-password">':'')+'<button style="position:fixed;left:10px;top:100px;width:100px;height:40px">'+(mode==='change'?'Update Password':'Sign In')+'</button>';container.append(form);
+ async function submit(e){e.preventDefault();const result=await fetch(mode==='fail'?'/api/session-fail':mode==='change'?'/api/password':'/api/session',{method:'POST',body:new URLSearchParams({username:document.getElementById('username').value,password:document.getElementById(mode==='change'?'new':'password').value})});if(result.ok){form.remove();history.pushState({},'', '/spa-complete');document.title='SPA fixture complete';}}
+ if(form.tagName==='FORM')form.addEventListener('submit',submit);else form.querySelector('button').addEventListener('click',submit);
+ if(mode==='cross')window.addEventListener('message',e=>{if(e.origin===`https://localhost:${location.port}`)parent.postMessage({empty:document.querySelector('#password').value==='',nonce:e.data.nonce},e.origin);});
+},100);
+</script>

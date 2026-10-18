@@ -22,5 +22,18 @@ namespace MajorisBrowser {
                 if(source.prepare_v2(sql,-1,out query)!=Sqlite.OK)throw new BrowserError.STORAGE("Unsupported browser history format");int result;while((result=query.step())==Sqlite.ROW){string url=query.column_text(0);try{UrlResolver.web_uri(url);}catch(Error e){continue;}store.imported_visit(url,query.column_text(1),query.column_int64(2));count++;}if(result!=Sqlite.DONE)throw new BrowserError.STORAGE("Source history could not be read");
             }finally{FileUtils.remove(copy);DirUtils.remove(temp);}return count;
         }
+        public static int firefox_bookmarks(Store store,string path) throws Error {
+            if(FileUtils.test(path+"-wal",FileTest.EXISTS) || FileUtils.test(path+"-journal",FileTest.EXISTS))throw new BrowserError.STORAGE("Close the source browser before importing its active places database");
+            var file=File.new_for_path(path);var before=file.query_info("standard::size,time::modified,time::modified-usec",FileQueryInfoFlags.NOFOLLOW_SYMLINKS);
+            if(before.get_size()>512*1024*1024)throw new BrowserError.STORAGE("Bookmark database exceeds 512 MiB");
+            string temp=DirUtils.make_tmp("majoris-bookmark-import-XXXXXX"),copy=Path.build_filename(temp,"places.db");int count=0;
+            try{
+                file.copy(File.new_for_path(copy),FileCopyFlags.NONE,null,null);var after=file.query_info("standard::size,time::modified,time::modified-usec",FileQueryInfoFlags.NOFOLLOW_SYMLINKS);
+                if(FileUtils.test(path+"-wal",FileTest.EXISTS) || FileUtils.test(path+"-journal",FileTest.EXISTS) || before.get_size()!=after.get_size() || before.get_attribute_uint64("time::modified")!=after.get_attribute_uint64("time::modified") || before.get_attribute_uint32("time::modified-usec")!=after.get_attribute_uint32("time::modified-usec"))throw new BrowserError.STORAGE("Source bookmarks changed during import; close that browser and retry");
+                Sqlite.Database source;if(Sqlite.Database.open_v2(copy,out source,Sqlite.OPEN_READONLY)!=Sqlite.OK)throw new BrowserError.STORAGE("Cannot read Firefox bookmarks");source.exec("PRAGMA query_only=ON; PRAGMA trusted_schema=OFF");Sqlite.Statement query;
+                string sql="WITH RECURSIVE folders(id,path,depth) AS (SELECT id,COALESCE(title,''),0 FROM moz_bookmarks WHERE parent=0 UNION ALL SELECT b.id,CASE WHEN f.path='' THEN COALESCE(b.title,'') ELSE f.path||' / '||COALESCE(b.title,'') END,f.depth+1 FROM moz_bookmarks b JOIN folders f ON b.parent=f.id WHERE b.type=2 AND f.depth<64) SELECT p.url,COALESCE(b.title,p.title,''),COALESCE(f.path,'') FROM moz_bookmarks b JOIN moz_places p ON p.id=b.fk LEFT JOIN folders f ON f.id=b.parent WHERE b.type=1 LIMIT 100000";
+                if(source.prepare_v2(sql,-1,out query)!=Sqlite.OK)throw new BrowserError.STORAGE("Unsupported Firefox bookmark schema");int result;while((result=query.step())==Sqlite.ROW){string url=query.column_text(0);try{UrlResolver.web_uri(url);}catch(Error e){continue;}store.bookmark(url,query.column_text(1),query.column_text(2));count++;}if(result!=Sqlite.DONE)throw new BrowserError.STORAGE("Firefox bookmarks could not be read");
+            }finally{FileUtils.remove(copy);DirUtils.remove(temp);}return count;
+        }
     }
 }

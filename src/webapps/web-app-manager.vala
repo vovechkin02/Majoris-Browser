@@ -23,16 +23,51 @@ namespace MajorisBrowser {
             if(name.strip()=="")throw new BrowserError.INVALID_APP("Application name is empty");string old=metadata.name;metadata.name=name.strip();
             try{store.put_app(metadata);metadata.install_desktop(data_home);}catch(Error e){metadata.name=old;store.put_app(metadata);throw e;}
         }
-        public static void uninstall(Store store,WebApp metadata,string data_home,bool remove_data) throws Error {
+        private static void checked_parent(string path) throws Error {
+            File? directory=File.new_for_path(path).get_parent();
+            while(directory!=null){
+                try{var info=directory.query_info(FileAttribute.STANDARD_TYPE,FileQueryInfoFlags.NOFOLLOW_SYMLINKS);if(info.get_file_type()!=FileType.DIRECTORY)throw new IOError.INVALID_ARGUMENT("Refusing a symlinked integration directory");}catch(IOError.NOT_FOUND e){}
+                directory=directory.get_parent();
+            }
+        }
+        private static string[] integration_files(WebApp metadata,string data_home){
+            string[] result={Path.build_filename(data_home,"applications",metadata.desktop_name)};
+            foreach(string size in new string[]{"scalable","256x256"})foreach(string extension in new string[]{".png",".svg"})result+=Path.build_filename(data_home,"icons","hicolor",size,"apps",metadata.application_id+extension);
+            return result;
+        }
+        private static bool integration_exists(File file) throws Error {
+            try{file.query_info(FileAttribute.STANDARD_TYPE,FileQueryInfoFlags.NOFOLLOW_SYMLINKS);return true;}catch(IOError.NOT_FOUND e){return false;}
+        }
+        public static void uninstall(Store store,WebApp metadata,string data_home,bool remove_data,ShellIntegration? integration=null) throws Error {
             var paths=new ProfilePaths(data_home);string profile=paths.webapp_context(metadata.id);int lease=MajorisCef.acquire_profile(profile);
-            string desktop=Path.build_filename(data_home,"applications",metadata.desktop_name),hidden=desktop+".uninstalling";bool moved=false;
+            var moved=new Gee.ArrayList<string>();var shell=integration??new DesktopShellIntegration();bool pinned=false,committed=false;
             try{
-                if(FileUtils.test(desktop,FileTest.EXISTS)){File.new_for_path(desktop).move(File.new_for_path(hidden),FileCopyFlags.NONE,null,null);moved=true;}
+                committed=store.uninstall_pending(metadata.id);
+                string[] files=integration_files(metadata,data_home);foreach(string path in files)checked_parent(path);
+                if(committed){foreach(var job in store.pending_uninstalls())if(job.url==metadata.id)remove_data=job.id==1;}
+                else{
+                    pinned=shell.is_pinned(metadata.desktop_name);
+                    foreach(string path in files){
+                        var original=File.new_for_path(path);var hidden=File.new_for_path(path+".uninstalling");
+                        // Recover a previously interrupted pre-commit rename.
+                        if(integration_exists(hidden) && !integration_exists(original))hidden.move(original,FileCopyFlags.NOFOLLOW_SYMLINKS,null,null);
+                        if(integration_exists(original)){
+                            if(original.query_info(FileAttribute.STANDARD_TYPE,FileQueryInfoFlags.NOFOLLOW_SYMLINKS).get_file_type()!=FileType.REGULAR)throw new IOError.INVALID_ARGUMENT("Refusing a non-regular application integration file");
+                            original.move(hidden,FileCopyFlags.NOFOLLOW_SYMLINKS,null,null);moved.add(path);
+                        }
+                    }
+                    if(pinned && !shell.set_pinned(metadata.desktop_name,false))throw new IOError.FAILED("Cannot remove application dock pin");
+                    store.begin_uninstall(metadata,remove_data);committed=true;
+                }
+                // Unregistration is durable. Failures here retain a retry job;
+                // profile erasure is last, after all integration cleanup succeeds.
+                foreach(string path in files){var hidden=File.new_for_path(path+".uninstalling");try{hidden.delete();}catch(IOError.NOT_FOUND e){}}
                 if(remove_data)MajorisCef.clear_locked_profile(profile);
-                store.delete_app(metadata.id);
-                foreach(string size in new string[]{"scalable","256x256"})foreach(string extension in new string[]{".png",".svg"})FileUtils.remove(Path.build_filename(data_home,"icons","hicolor",size,"apps",metadata.application_id+extension));
-                FileUtils.remove(hidden);
-            }catch(Error e){if(moved && FileUtils.test(hidden,FileTest.EXISTS))FileUtils.rename(hidden,desktop);throw e;}
+                store.finish_uninstall(metadata.id);
+            }catch(Error e){
+                if(!committed){string rollback="";foreach(string path in moved){try{var hidden=File.new_for_path(path+".uninstalling");if(integration_exists(hidden))hidden.move(File.new_for_path(path),FileCopyFlags.NOFOLLOW_SYMLINKS,null,null);}catch(Error restore){rollback+="\n"+restore.message;}}if(pinned && !shell.set_pinned(metadata.desktop_name,true))rollback+="\nDock pin could not be restored";if(rollback!="")throw new IOError.FAILED("Uninstall aborted: "+e.message+". Some integration files require recovery:"+rollback);}
+                throw e;
+            }
             finally{MajorisCef.release_profile(lease);}
         }
     }

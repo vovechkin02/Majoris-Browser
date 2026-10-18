@@ -2,7 +2,7 @@ Source: majoris-browser
 Section: web
 Priority: optional
 Maintainer: Majoris Developers <developers@majoris.org>
-Build-Depends: debhelper-compat (= 13), meson, ninja-build, valac, libgtk-4-dev (>= 4.14), libadwaita-1-dev (>= 1.5), libglib2.0-dev, libgee-0.8-dev, libjson-glib-dev, libsqlite3-dev, libsecret-1-dev, libsoup-3.0-dev, libxml2-dev, libgdk-pixbuf-2.0-dev, python3, python3-gi <!nocheck>, libnss3-tools <!nocheck>, gnome-keyring <!nocheck>, xvfb <!nocheck>, xauth <!nocheck>, dbus-daemon <!nocheck>, gettext, cmake, g++
+Build-Depends: debhelper-compat (= 13), meson, ninja-build, valac, libgtk-4-dev (>= 4.18), libadwaita-1-dev (>= 1.5), libglib2.0-dev, libgee-0.8-dev, libjson-glib-dev, libsqlite3-dev, libsecret-1-dev, libsoup-3.0-dev, libxml2-dev, libpsl-dev, libgdk-pixbuf-2.0-dev, python3, python3-gi <!nocheck>, gir1.2-atspi-2.0 <!nocheck>, at-spi2-core <!nocheck>, libxtst6 <!nocheck>, libnss3-tools <!nocheck>, gnome-keyring <!nocheck>, xvfb <!nocheck>, xauth <!nocheck>, dbus-daemon <!nocheck>, gettext, cmake, g++
 Standards-Version: 4.7.0
 Rules-Requires-Root: no
 

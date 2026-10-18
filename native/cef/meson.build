@@ -11,7 +11,7 @@ cef_helper = get_option('prefix') / get_option('libexecdir') / 'majoris-browser-
 cef_bridge = shared_library('majoris-cef', ['src/bridge.cpp', 'src/profile-data.cpp'], include_directories: cef_inc,
   link_args: ['-Wl,--version-script=' + meson.current_source_dir() / 'majoris-cef.map'],
   link_depends: files('majoris-cef.map'),
-  dependencies: [gio, dependency('gobject-2.0'), cef_lib, wrapper_lib, dependency('threads')],
+  dependencies: [gio, dependency('gobject-2.0'), dependency('libpsl'), cef_lib, wrapper_lib, dependency('threads')],
   cpp_args: ['-I' + cef_root, '-DMAJORIS_VERSION="' + meson.project_version() + '"', '-Wno-unused-parameter'], install: true, install_dir: get_option('libdir') / 'majoris-browser',
   build_rpath: cef_root / 'Release', install_rpath: cef_runtime_dir)
 executable('majoris-browser-cef-subprocess', 'subprocess/main.cpp', include_directories: cef_inc,

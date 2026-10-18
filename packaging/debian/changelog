@@ -1,3 +1,14 @@
+majoris-browser (0.1.0-2) unstable; urgency=medium
+
+  * Correct cancelled clear-on-exit and durable web-app uninstall recovery.
+  * Qualify partition-aware cookie and engine storage-key clearing.
+  * Complete modern credentials, contextual address filling and GTK page actions.
+  * Bridge Chromium accessibility to GTK/AT-SPI and real OSR drag/input.
+  * Require GTK 4.18, libpsl and expanded integration-test dependencies.
+  * Keep unavailable OSR PiP and unverified target-desktop gates explicit.
+
+ -- Majoris Developers <developers@majoris.org>  Sun, 18 Oct 2026 23:30:00 +1100
+
 majoris-browser (0.1.0-1) unstable; urgency=medium
 
   * Initial development package.

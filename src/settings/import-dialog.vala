@@ -2,17 +2,18 @@ namespace MajorisBrowser {
     public class ImportDialog : Adw.AlertDialog {
         private Application app;
         public ImportDialog(Application app){
-            Object(heading:_("Import Browser Data"),body:_("Close the source browser first. Select a portable bookmark HTML file, Chromium/Brave Bookmarks JSON, or a Chromium/Firefox history database. The source is read only. Password import is not supported."));this.app=app;
-            add_response("cancel",_("Cancel"));add_response("html",_("Bookmark HTML"));add_response("json",_("Chromium Bookmarks"));add_response("chromium",_("Chromium History"));add_response("firefox",_("Firefox History"));response.connect((id)=>{if(id!="cancel")choose.begin(id);});
+            Object(heading:_("Import Browser Data"),body:_("Portable HTML and Chromium bookmark JSON can be imported at any time. Firefox bookmarks and browser history use read-only database snapshots; close the source browser if its database is active. Password import is not supported."));this.app=app;
+            add_response("cancel",_("Cancel"));add_response("html",_("Bookmark HTML"));add_response("json",_("Chromium Bookmarks"));add_response("firefox-bookmarks",_("Firefox Bookmarks"));add_response("chromium",_("Chromium History"));add_response("firefox",_("Firefox History"));response.connect((id)=>{if(id!="cancel")choose.begin(id);});
         }
         private async void choose(string kind){
             var parent=get_root() as Gtk.Window;
             try{var dialog=new Gtk.FileDialog();var file=yield dialog.open(parent,null);string? path=file.get_path();if(path==null)throw new IOError.NOT_SUPPORTED("Select a local file");app.hold();app.storage.run((store)=>{
                 int count=0;string? error=null;try{
                     if(kind=="chromium" || kind=="firefox")count=ProfileImport.history(store,path,kind=="firefox");
+                    else if(kind=="firefox-bookmarks")count=ProfileImport.firefox_bookmarks(store,path);
                     else{string text;var info=file.query_info(FileAttribute.STANDARD_SIZE,FileQueryInfoFlags.NONE);if(info.get_size()>8*1024*1024)throw new IOError.INVALID_DATA("Bookmark file exceeds 8 MiB");FileUtils.get_contents(path,out text);if(kind=="json")count=ProfileImport.chromium_bookmarks(store,text);else foreach(var record in BookmarkFormat.parse(text)){store.bookmark(record.url,record.title,record.folder);count++;}}
                 }catch(Error e){error=e.message;}
-                Idle.add(()=>{if(parent!=null){var result=new Adw.AlertDialog(error==null?_("Import Complete"):_("Import Failed"),error??_("Imported %d records.").printf(count));result.add_response("ok",_("OK"));result.present(parent);}app.release();return Source.REMOVE;});
+                Idle.add(()=>{if(error==null && kind!="chromium" && kind!="firefox")app.bookmarks_changed();if(parent!=null){var result=new Adw.AlertDialog(error==null?_("Import Complete"):_("Import Failed"),error??_("Imported %d records.").printf(count));result.add_response("ok",_("OK"));result.present(parent);}app.release();return Source.REMOVE;});
             });}catch(Error e){if(parent!=null)EngineDialogs.show_error(parent,e.message);}
         }
     }

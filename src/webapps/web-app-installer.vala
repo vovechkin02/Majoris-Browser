@@ -3,7 +3,7 @@ namespace MajorisBrowser {
         // Called on the storage worker. The launcher is the final publication step.
         public static void install (Store store,WebApp app,string data_home,Bytes? image=null) throws Error {
             if(!ProfilePaths.valid_id(app.id))throw new BrowserError.INVALID_APP("Invalid application identity");
-            if(store.get_app(app.id)!=null)throw new BrowserError.INVALID_APP("Application is already installed");
+            if(store.get_app(app.id)!=null || store.uninstall_pending(app.id))throw new BrowserError.INVALID_APP("Application is already installed or awaiting uninstall cleanup");
             UrlResolver.web_uri(app.start_url);
             if(new WebAppNavigationPolicy(app.scope).classify(app.start_url)!=NavigationDecision.APP_SCOPE)
                 throw new BrowserError.INVALID_APP("Invalid application scope");

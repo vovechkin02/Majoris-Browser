@@ -113,5 +113,24 @@ void main (string[] args) {
     Test.add_func("/bookmarks/bar-order-and-rename",()=>{
         try{var store=new Store(":memory:");store.bookmark("https://one.test/","One");store.bookmark("https://two.test/","Two");store.create_folder("Empty");var items=store.bar_items();assert(items.size==3);string first=items[0].folder,second=items[1].folder;store.reorder_bar(second,first);assert(store.bar_items()[0].folder==second);store.reorder_bar("folder:Empty",second);assert(store.bar_items()[0].title=="Empty");store.rename_folder("Empty","Renamed");assert(store.bar_items()[0].title=="Renamed");store.rename_folder("Renamed","Renamed");assert(store.folders().contains("Renamed"));store.reorder_bar("untrusted","folder:Renamed");assert(store.bar_items().size==3);}catch(Error e){error("%s",e.message);}
     });
+    Test.add_func("/lifecycle/exit-intent",()=>{
+        var exit=new ExitOperation();assert(exit.begin(true));assert(!exit.begin(true));assert(!exit.approve(false));assert(!exit.finish(false));exit.cancel();assert(!exit.finish(true));assert(exit.begin(false));assert(exit.approve(true));assert(!exit.finish(true));assert(!exit.finish(true));
+        var confirmed=new ExitOperation();assert(confirmed.begin(true));assert(confirmed.approve(true));assert(!confirmed.finish(false));assert(confirmed.finish(true));assert(!confirmed.finish(true));
+    });
+    Test.add_func("/tabs/audio-transitions",()=>{
+        var state=new TabAudioState();assert(state.icon==null);state.update("audio","1");assert(state.icon=="audio-volume-high-symbolic");state.update("muted","1");state.update("audio","0");assert(state.icon=="audio-volume-muted-symbolic");state.update("muted","0");assert(state.icon==null && !state.available);state.update("audio","1");state.update("navigation-started","");assert(state.icon==null);state.update("muted","1");state.update("crashed","");assert(state.muted && !state.playing);
+    });
+    Test.add_func("/import/firefox-bookmarks",()=>{
+        try{string root=DirUtils.make_tmp("majoris-firefox-import-XXXXXX"),path=Path.build_filename(root,"places.sqlite");{
+            Sqlite.Database db;assert(Sqlite.Database.open(path,out db)==Sqlite.OK);assert(db.exec("CREATE TABLE moz_places(id INTEGER PRIMARY KEY,url TEXT,title TEXT);CREATE TABLE moz_bookmarks(id INTEGER PRIMARY KEY,type INTEGER,fk INTEGER,parent INTEGER,title TEXT);INSERT INTO moz_places VALUES(1,'https://example.test/','Fallback'),(2,'javascript:alert(1)','Unsafe');INSERT INTO moz_bookmarks VALUES(1,2,NULL,0,''),(2,2,NULL,1,'Toolbar'),(3,2,NULL,2,'Work'),(4,1,1,3,'Saved title'),(5,1,2,3,'Unsafe')")==Sqlite.OK);
+        }uint8[] before,after;FileUtils.get_data(path,out before);var store=new Store(":memory:");assert(ProfileImport.firefox_bookmarks(store,path)==1);var rows=store.search(true);assert(rows.size==1 && rows[0].title=="Saved title" && rows[0].folder=="Toolbar / Work");FileUtils.get_data(path,out after);assert(before.length==after.length && Memory.cmp(before,after,before.length)==0);assert(!FileUtils.test(path+"-shm",FileTest.EXISTS));FileUtils.set_contents(path+"-wal","busy");bool refused=false;try{ProfileImport.firefox_bookmarks(store,path);}catch(Error e){refused=true;}assert(refused);FileUtils.remove(path+"-wal");FileUtils.remove(path);DirUtils.remove(root);
+        }catch(Error e){error("%s",e.message);}
+    });
+    Test.add_func("/storage/category-and-time-clearing",()=>{
+        try{var store=new Store(":memory:");int64 now=new DateTime.now_utc().to_unix();store.imported_visit("https://old.test/","Old",now-7200);store.imported_visit("https://recent.test/","Recent",now);store.bookmark("https://saved.test/","Saved");store.permission("browser","https://site.test/","camera",1);store.permission("app-id","https://site.test/","camera",1);store.never_save("browser","https://site.test/",true);store.save_address("home","Home","{}");
+            store.save_download("recent","{\"profile\":\"browser\",\"status\":\"complete\",\"started\":"+now.to_string()+"}");store.save_download("old","{\"profile\":\"browser\",\"status\":\"complete\",\"started\":1}");store.save_download("active","{\"profile\":\"browser\",\"status\":\"active\",\"started\":"+now.to_string()+"}");store.save_download("app","{\"profile\":\"app-id\",\"status\":\"complete\",\"started\":"+now.to_string()+"}");
+            store.clear_browser_records(true,true,true,now-3600,true);assert(store.search(false).size==1 && store.search(false)[0].title=="Old");assert(store.search(true).size==1);assert(store.permission_value("browser","https://site.test/","camera")==0);assert(store.permission_value("app-id","https://site.test/","camera")==1);assert(store.password_blocked("browser","https://site.test/"));assert(store.addresses().size==0 && store.download_records().size==3);
+        }catch(Error e){error("%s",e.message);}
+    });
     Test.run ();
 }

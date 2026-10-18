@@ -16,11 +16,12 @@ namespace MajorisBrowser {
             var version = statement ("PRAGMA user_version");
             version.step ();
             int current=version.column_int(0);
-            if (current > 4) throw new BrowserError.STORAGE ("Database is newer than this Browser");
+            if (current > 5) throw new BrowserError.STORAGE ("Database is newer than this Browser");
             if(current==0)exec ("BEGIN IMMEDIATE; CREATE TABLE IF NOT EXISTS history(id INTEGER PRIMARY KEY,url TEXT NOT NULL,title TEXT NOT NULL,visited INTEGER NOT NULL); CREATE TABLE IF NOT EXISTS bookmarks(id INTEGER PRIMARY KEY,url TEXT UNIQUE NOT NULL,title TEXT NOT NULL,folder TEXT NOT NULL DEFAULT ''); CREATE TABLE IF NOT EXISTS sessions(window_id TEXT PRIMARY KEY,state TEXT NOT NULL); CREATE TABLE IF NOT EXISTS webapps(id TEXT PRIMARY KEY,metadata TEXT NOT NULL); CREATE TABLE IF NOT EXISTS permissions(profile TEXT,origin TEXT,kind TEXT,value INTEGER,PRIMARY KEY(profile,origin,kind)); PRAGMA user_version=1; COMMIT;");
             if(current<2)exec("BEGIN IMMEDIATE; CREATE TABLE bookmark_folders(name TEXT PRIMARY KEY); INSERT OR IGNORE INTO bookmark_folders SELECT DISTINCT folder FROM bookmarks WHERE folder<>''; CREATE TABLE browser_snapshot(id INTEGER PRIMARY KEY CHECK(id=1),generation INTEGER NOT NULL,state TEXT NOT NULL,clean INTEGER NOT NULL); CREATE TABLE downloads(id TEXT PRIMARY KEY,metadata TEXT NOT NULL); CREATE TABLE never_save(profile TEXT,origin TEXT,PRIMARY KEY(profile,origin)); ALTER TABLE permissions ADD COLUMN expires INTEGER NOT NULL DEFAULT 0; PRAGMA user_version=2; COMMIT;");
             if(current<3)exec("BEGIN IMMEDIATE; CREATE TABLE addresses(id TEXT PRIMARY KEY,title TEXT NOT NULL,fields TEXT NOT NULL); PRAGMA user_version=3; COMMIT;");
             if(current<4)exec("BEGIN IMMEDIATE; CREATE TABLE bookmark_bar_order(item TEXT PRIMARY KEY,rank INTEGER NOT NULL); PRAGMA user_version=4; COMMIT;");
+            if(current<5)exec("BEGIN IMMEDIATE; CREATE TABLE app_uninstall_jobs(id TEXT PRIMARY KEY,metadata TEXT NOT NULL,remove_data INTEGER NOT NULL); PRAGMA user_version=5; COMMIT;");
         }
         private void exec (string sql) throws Error {
             if (db.exec (sql) != Sqlite.OK) throw new BrowserError.STORAGE (db.errmsg ());
@@ -61,6 +62,9 @@ namespace MajorisBrowser {
         public void clear_history (int64 since = 0) throws Error {
             var s = statement ("DELETE FROM history WHERE visited>=?"); s.bind_int64 (1,since); finish (s);
         }
+        public void clear_browser_records(bool history,bool permissions,bool addresses,int64 since=0,bool downloads=false) throws Error {
+            exec("BEGIN IMMEDIATE");try{if(history)clear_history(since);if(permissions)exec("DELETE FROM permissions WHERE profile='browser'");if(addresses)exec("DELETE FROM addresses");if(downloads){var s=statement("DELETE FROM downloads WHERE json_valid(metadata) AND COALESCE(json_extract(metadata,'$.profile'),'browser')='browser' AND COALESCE(json_extract(metadata,'$.started'),0)>=? AND json_extract(metadata,'$.status') NOT IN ('active','paused')");s.bind_int64(1,since);finish(s);}exec("COMMIT");}catch(Error e){exec("ROLLBACK");throw e;}
+        }
         public void save_session (string id, string state, bool is_private) throws Error {
             if (is_private) return;
             var s = statement ("INSERT INTO sessions VALUES(?,?) ON CONFLICT(window_id) DO UPDATE SET state=excluded.state");
@@ -71,6 +75,7 @@ namespace MajorisBrowser {
             return s.step () == Sqlite.ROW ? s.column_text (0) : null;
         }
         public void put_app (WebApp app) throws Error {
+            if(uninstall_pending(app.id))throw new BrowserError.STORAGE("Application cleanup is pending; retry uninstall before reinstalling or editing it");
             var s = statement ("INSERT INTO webapps VALUES(?,?) ON CONFLICT(id) DO UPDATE SET metadata=excluded.metadata");
             s.bind_text (1,app.id); s.bind_text (2,app.serialize ()); finish (s);
         }
@@ -85,6 +90,14 @@ namespace MajorisBrowser {
             return result;
         }
         public void delete_app (string id) throws Error { var s = statement ("DELETE FROM webapps WHERE id=?"); s.bind_text (1,id); finish (s); }
+        public bool uninstall_pending(string id) throws Error {var s=statement("SELECT 1 FROM app_uninstall_jobs WHERE id=?");s.bind_text(1,id);return s.step()==Sqlite.ROW;}
+        public Gee.ArrayList<Record> pending_uninstalls() throws Error {
+            var rows=new Gee.ArrayList<Record>();var s=statement("SELECT id,metadata,remove_data FROM app_uninstall_jobs");while(s.step()==Sqlite.ROW)rows.add(new Record(s.column_int(2),s.column_text(0),s.column_text(1)));return rows;
+        }
+        public void begin_uninstall(WebApp metadata,bool remove_data) throws Error {
+            exec("BEGIN IMMEDIATE");try{var s=statement("INSERT INTO app_uninstall_jobs VALUES(?,?,?)");s.bind_text(1,metadata.id);s.bind_text(2,metadata.serialize());s.bind_int(3,remove_data?1:0);finish(s);delete_app(metadata.id);exec("COMMIT");}catch(Error e){exec("ROLLBACK");throw e;}
+        }
+        public void finish_uninstall(string id) throws Error {var s=statement("DELETE FROM app_uninstall_jobs WHERE id=?");s.bind_text(1,id);finish(s);}
         public void edit_bookmark(int64 id,string url,string title,string folder) throws Error {
             UrlResolver.web_uri(url);create_folder(folder);var s=statement("UPDATE bookmarks SET url=?,title=?,folder=? WHERE id=?");s.bind_text(1,url);s.bind_text(2,title);s.bind_text(3,folder);s.bind_int64(4,id);finish(s);
         }

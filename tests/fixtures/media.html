@@ -1,0 +1,10 @@
+<!doctype html><meta charset="utf-8"><title>Media fixture</title>
+<button id="start" style="position:absolute;left:0;top:0;width:200px;height:70px">Start audio</button>
+<canvas id="canvas" width="160" height="90" hidden></canvas>
+<video id="video" muted playsinline style="position:absolute;left:0;top:90px;width:320px;height:180px"></video>
+<script>
+window.context=null;
+start.onclick=async()=>{context=new AudioContext();const source=context.createOscillator();const gain=context.createGain();gain.gain.value=.03;source.connect(gain).connect(context.destination);source.start();await context.resume();};
+const paint=()=>{const c=canvas.getContext('2d');c.fillStyle='#3874cb';c.fillRect(0,0,160,90);requestAnimationFrame(paint);};paint();
+video.srcObject=canvas.captureStream(10);
+</script>

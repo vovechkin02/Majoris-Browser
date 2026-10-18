@@ -27,6 +27,7 @@ namespace MajorisBrowser {
             });
             var privacy=new Adw.PreferencesPage();privacy.title=_("Privacy");privacy.icon_name="security-high-symbolic";add(privacy);
             var data=new Adw.PreferencesGroup();data.title=_("Browser Data");privacy.add(data);
+            var categories=new Adw.ActionRow();categories.title=_("Clear Selected Browsing Data…");categories.activatable=true;categories.activated.connect(()=>new BrowsingDataDialog(app).present(this));data.add(categories);
             var cookies=new Adw.SwitchRow();cookies.title=_("Block Third-Party Cookies");app.preferences.bind("block-third-party-cookies",cookies,"active",SettingsBindFlags.DEFAULT);data.add(cookies);
             var https=new Adw.SwitchRow();https.title=_("Prefer HTTPS");https.subtitle=_("Use Chromium’s HTTPS upgrades when available");app.preferences.bind("https-first",https,"active",SettingsBindFlags.DEFAULT);data.add(https);
             var passwords=new Adw.ActionRow();passwords.title=_("Saved Passwords");passwords.subtitle=_("Search, delete or authenticate to view and update passwords");passwords.activatable=true;passwords.activated.connect(()=>new CredentialManager().present(this));data.add(passwords);
@@ -49,7 +50,13 @@ namespace MajorisBrowser {
             var apps=new Adw.PreferencesGroup();apps.title=_("Installed Applications");webapps.add(apps);
             app.storage.run((store)=>{
                 var installed=store.apps();
+                var pending=store.pending_uninstalls();
                 Idle.add(()=>{
+                    foreach(var job in pending){
+                        try{var metadata=WebApp.deserialize(job.title);var row=new Adw.ActionRow();row.use_markup=false;row.title=metadata.name;row.subtitle=_("Uninstalled; cleanup is incomplete. Data deletion, if requested, has not been reported complete.");var retry=new Gtk.Button.with_label(_("Retry Cleanup"));retry.valign=Gtk.Align.CENTER;row.add_suffix(retry);apps.add(row);
+                            retry.clicked.connect(()=>{retry.sensitive=false;app.storage.run((db)=>{try{WebAppManager.uninstall(db,metadata,Environment.get_user_data_dir(),job.id==1);Idle.add(()=>{apps.remove(row);return Source.REMOVE;});}catch(Error e){string message=e.message;Idle.add(()=>{retry.sensitive=true;EngineDialogs.show_error(this,message);return Source.REMOVE;});}});});
+                        }catch(Error e){EngineDialogs.show_error(this,e.message);}
+                    }
                     foreach(var metadata in installed){
                         var row=new Adw.ActionRow();row.use_markup=false;row.title=metadata.name;row.subtitle=metadata.start_url;apps.add(row);
                         row.subtitle+=" · "+new DateTime.from_unix_local(metadata.installed_at).format("%x");
@@ -69,7 +76,7 @@ namespace MajorisBrowser {
                         });
                         var remove=new Gtk.Button.from_icon_name("user-trash-symbolic");remove.tooltip_text=_("Uninstall");remove.valign=Gtk.Align.CENTER;row.add_suffix(remove);
                         remove.clicked.connect(()=>{
-                            var confirm=new Adw.AlertDialog(_("Uninstall Application?"),_("Close the app first. Choose whether to retain its site data."));confirm.add_response("cancel",_("Cancel"));confirm.add_response("remove",_("Keep Data"));confirm.add_response("erase",_("Remove Data"));confirm.set_response_appearance("erase",Adw.ResponseAppearance.DESTRUCTIVE);
+                            var confirm=new Adw.AlertDialog(_("Uninstall Application?"),_("Close the app first. Choose whether to retain its site data."));confirm.add_response("cancel",_("Cancel"));confirm.add_response("remove",_("Uninstall App"));confirm.add_response("erase",_("Uninstall App and Delete Data"));confirm.set_response_appearance("erase",Adw.ResponseAppearance.DESTRUCTIVE);
                             confirm.response.connect((id)=>{if(id=="remove" || id=="erase"){
                                 bool erase=id=="erase";app.storage.run((store)=>{try{WebAppManager.uninstall(store,metadata,Environment.get_user_data_dir(),erase);Idle.add(()=>{new DesktopShellIntegration().set_pinned(metadata.desktop_name,false);apps.remove(row);return Source.REMOVE;});}catch(Error e){string error=e.message;Idle.add(()=>{EngineDialogs.show_error(this,error);return Source.REMOVE;});}});
                             }});confirm.present(this);

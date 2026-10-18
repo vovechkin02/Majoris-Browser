@@ -3,6 +3,7 @@ namespace MajorisBrowser {
         private Application app;
         private bool is_private;
         public bool private_mode { get { return is_private; } }
+        public MajorisCef.View? browsing_engine(){return is_private || selected==null?null:selected.engine;}
         private Adw.TabView tabs = new Adw.TabView ();
         private Gtk.Entry address = new Gtk.Entry ();
         private Omnibox omnibox;
@@ -18,9 +19,12 @@ namespace MajorisBrowser {
         private Gee.HashMap<BrowserSurface,string> manifest_requests=new Gee.HashMap<BrowserSurface,string>();
         private Gee.HashMap<string,WebApp> icon_requests=new Gee.HashMap<string,WebApp>();
         private bool window_closing=false;
+        public bool closing { get { return window_closing; } }
+        private signal void close_operation_finished(bool accepted);
         private bool window_close_pending;
         private int tab_closes_pending;
         private bool close_downloads_confirmed;
+        private bool download_close_pending;
         private Gtk.SearchEntry find = new Gtk.SearchEntry ();
         private Gtk.Revealer find_bar = new Gtk.Revealer ();
         private string window_id = Uuid.string_random ();
@@ -28,6 +32,7 @@ namespace MajorisBrowser {
         public BrowserWindow (Application app,bool is_private,bool initial_tab = true) {
             Object (application:app,title:is_private ? _("Private Browser") : _("Browser"),default_width:1200,default_height:800);
             this.app=app; this.is_private=is_private;
+            app.cancel_exit();
             omnibox=new Omnibox(address,app,()=>{var result=new Gee.ArrayList<Record>();for(int i=0;i<tabs.n_pages;i++){var surface=tabs.get_nth_page(i).child as BrowserSurface;result.add(new Record(i,surface.url,surface.page_title));}return result;});
             omnibox.accepted.connect((url)=>{for(int i=0;i<tabs.n_pages;i++){var page=tabs.get_nth_page(i);if(((BrowserSurface)page.child).url==url){tabs.selected_page=page;return;}}if(selected!=null)selected.navigate(url);});
             var layout = new Adw.ToolbarView ();
@@ -68,9 +73,12 @@ namespace MajorisBrowser {
             setup_actions ();
             close_request.connect (() => {
                 if(window_closing)return false;
-                if(window_close_pending || tab_closes_pending>0)return true;
+                if(window_close_pending)return true;
+                if(download_close_pending)return true;
+                if(tab_closes_pending>0){app.cancel_exit();close_operation_finished(false);return true;}
                 if(!close_downloads_confirmed){for(int i=0;i<tabs.n_pages;i++)if(app.downloads.active_for(((BrowserSurface)tabs.get_nth_page(i).child).engine)){
-                    var dialog=new Adw.AlertDialog(_("Cancel Downloads and Close?"),_("This window still has active downloads."));dialog.add_response("cancel",_("Keep Open"));dialog.add_response("close",_("Cancel Downloads and Close"));dialog.close_response="cancel";dialog.response.connect((id)=>{if(id=="close"){close_downloads_confirmed=true;close();}else app.sessions.closing_all=false;});dialog.present(this);return true;
+                    download_close_pending=true;
+                    var dialog=new Adw.AlertDialog(_("Cancel Downloads and Close?"),_("This window still has active downloads."));dialog.add_response("cancel",_("Keep Open"));dialog.add_response("close",_("Cancel Downloads and Close"));dialog.close_response="cancel";dialog.response.connect((id)=>{download_close_pending=false;if(id=="close"){close_downloads_confirmed=true;close();}else{app.cancel_exit();close_operation_finished(false);}});dialog.present(this);return true;
                 }}
                 close_window.begin();return true;
             });
@@ -85,10 +93,17 @@ namespace MajorisBrowser {
             var b=new Gtk.Button.from_icon_name(icon); b.tooltip_text=tooltip;b.clicked.connect (() => callback ());return b;
         }
         private delegate void ActionFunc ();
+        public async bool close_for_exit(){
+            if(window_closing)return true;
+            bool accepted=false,resolved=false;
+            ulong handler=close_operation_finished.connect((result)=>{if(resolved)return;resolved=true;accepted=result;Idle.add(()=>{close_for_exit.callback();return Source.REMOVE;});});
+            close();yield;disconnect(handler);return accepted;
+        }
         private async void close_tab(Adw.TabPage page){
             tab_closes_pending++;
             var surface=(BrowserSurface)page.child;
             bool accepted=yield surface.request_close();
+            if(!accepted)app.cancel_exit();
             if(accepted){closed.add(new TabState(surface.url,page.pinned));if(closed.size>25)closed.remove_at(0);}
             tabs.close_page_finish(page,accepted);tab_closes_pending--;
             if(accepted){schedule_session();if(tabs.n_pages==0)close();}
@@ -100,7 +115,7 @@ namespace MajorisBrowser {
                 var surface=(BrowserSurface)tabs.get_nth_page(i).child;
                 tabs.selected_page=tabs.get_nth_page(i);
                 if(!(yield surface.request_close())){
-                    window_close_pending=false;close_downloads_confirmed=false;app.sessions.closing_all=false;
+                    window_close_pending=false;close_downloads_confirmed=false;app.cancel_exit();close_operation_finished(false);
                     // Earlier tabs may already have consented. Remove their closed engines.
                     for(int j=tabs.n_pages-1;j>=0;j--){var page=tabs.get_nth_page(j);if(((BrowserSurface)page.child).closed)tabs.close_page(page);}
                     return;
@@ -111,7 +126,7 @@ namespace MajorisBrowser {
             if(!is_private && !app.sessions.restoring)app.sessions.save(false,this);
             window_closing=true;
             if(session_save!=0){Source.remove(session_save);session_save=0;}
-            close();
+            close_operation_finished(true);close();
         }
         private void action (string name,string[] shortcuts,owned ActionFunc callback) {
             var a=new SimpleAction(name,null);a.activate.connect (() => callback ());add_action(a);
@@ -157,7 +172,7 @@ namespace MajorisBrowser {
             action("print",{"<Control>p"},() => command("print"));
             action("save-page",{"<Control>s"},()=>command("save-page"));
             action("save-pdf",{},()=>command("save-pdf"));
-            action("picture-in-picture",{},()=>command("picture-in-picture"));
+            action("picture-in-picture",{},()=>command("picture-in-picture"));((SimpleAction)lookup_action("picture-in-picture")).set_enabled(false);
             action("fill-address",{},()=>{if(selected!=null)new AddressDialog(app,selected).present(this);});
             action("about",{},() => {
                 var about=new Adw.AboutDialog();about.application_name="Majoris Browser";about.application_icon="com.majoris.browser";about.version=Config.VERSION;about.developer_name="Majoris";about.comments="CEF "+MajorisCef.version();about.license_type=Gtk.License.GPL_3_0;about.present(this);
@@ -174,6 +189,7 @@ namespace MajorisBrowser {
             page.notify["pinned"].connect(()=>app.sessions.changed());
             EngineDialogs.attach(surface,this);
             PageActions.attach(surface);
+            new AddressController(app,surface);
             if(!is_private)new CredentialController(app,surface,"browser");
             surface.changed.connect((kind,value)=>{var owner=surface.get_root() as BrowserWindow;if(owner!=null)owner.surface_event(page,surface,kind,value);});
             surface.engine.popup.connect((child,background,url,new_window)=>{var owner=surface.get_root() as BrowserWindow;if(owner==null || owner.window_closing){child.close();return;}if(new_window){var window=new BrowserWindow(app,is_private,false);window.add_surface(new OffscreenBrowserSurface.with_engine(child));window.present();}else owner.add_surface(new OffscreenBrowserSurface.with_engine(child),background);});
@@ -184,7 +200,7 @@ namespace MajorisBrowser {
                 if(kind=="title") {page.title=value;if(selected==surface)title=value;}
                 if(kind=="ready")surface.engine.command("zoom:"+app.preferences.get_double("default-zoom").to_string());
                 if(kind=="image:favicon" && value!="")page.icon=new BytesIcon(new Bytes(Base64.decode(value)));
-                if(kind=="audio" || kind=="muted"){page.indicator_activatable=true;page.indicator_icon=new ThemedIcon(kind=="muted" && value=="1"?"audio-volume-muted-symbolic":value=="1"?"audio-volume-high-symbolic":"audio-volume-low-symbolic");}
+                if(kind=="audio" || kind=="muted" || kind=="navigation-started" || kind=="crashed"){page.indicator_activatable=surface.audio_state.available;string? icon=surface.audio_state.icon;page.indicator_icon=icon==null?null:new ThemedIcon(icon);}
                 if(kind=="url"){if(selected==surface)omnibox.set_address(value);schedule_session();}
                 if(kind=="loading") {page.loading=value=="1";if(selected==surface)sync_navigation();if(value=="0" && !is_private){string visit_url=surface.url;string visit_title=surface.page_title;app.storage.run((store) => store.visit(visit_url,visit_title));}}
                 if(kind=="back" && selected==surface)back.sensitive=value=="1";
@@ -247,39 +263,20 @@ namespace MajorisBrowser {
         private void site_info () {
             if(selected==null)return;
             var dialog=new Adw.AlertDialog(_("Site Information"),selected.security+"\n"+selected.url);
-            dialog.add_response("close",_("Close"));dialog.add_response("clear",_("Clear This Site’s Cookies"));dialog.add_response("site-data",_("Clear This Site’s Data"));if(!is_private)dialog.add_response("password",_("Site Password…"));
+            dialog.add_response("certificate",_("Certificate Details"));
+            dialog.body+="\n\n"+_("Cookies associated with this site can be shared with related subdomains. Clearing them may sign you out of related sites. Origin storage is separate; full cache/partition clearing uses the closed-profile controls in Settings.");
+            dialog.add_response("close",_("Close"));dialog.add_response("clear",_("Clear Associated Cookies"));dialog.add_response("site-data",_("Clear Origin Storage and Associated Cookies"));if(!is_private)dialog.add_response("password",_("Site Password…"));
             var controls=new Gtk.Box(Gtk.Orientation.VERTICAL,4);
             var surface=selected;string url=surface.url;
+            dialog.response.connect((id)=>{if(id=="certificate")new CertificateDialog(surface.certificate_info).present(this);});
             foreach(string kind in new string[]{"camera","microphone","location","notifications","clipboard","multiple downloads","pointer lock","keyboard lock","storage access","local fonts"}){
                 var row=new Adw.ComboRow();row.title=kind;row.model=new Gtk.StringList({_("Ask"),_("Allow"),_("Block")});row.sensitive=!is_private;controls.append(row);
                 if(!is_private)app.storage.run((store)=>{int value=store.permission_value("browser",url,kind);Idle.add(()=>{row.selected=value;row.notify["selected"].connect(()=>app.permissions.remember("browser",url,{kind},(int)row.selected));return Source.REMOVE;});});
             }var scroll=new Gtk.ScrolledWindow();scroll.min_content_height=250;scroll.child=controls;dialog.extra_child=scroll;
             var view=surface.engine;dialog.response.connect((id)=>{if(id=="clear")view.clear_site_cookies(url);if(id=="site-data")view.clear_site_data(url);if(id=="password")try{new CredentialDialog(UrlResolver.origin(url),view).present(this);}catch(Error e){EngineDialogs.show_error(this,e.message);}});dialog.present(this);
         }
-        private void context_menu (BrowserSurface surface,string description) {
-            Json.Object data;
-            try{var parser=new Json.Parser();parser.load_from_data(description);data=parser.get_root().get_object();}catch(Error e){return;}
-            string link=data.get_string_member("link"),source=data.get_string_member("source"),selection=data.get_string_member("selection");
-            var menu=new Menu();
-            foreach(string name in new string[]{"back","forward","reload","print","devtools"})menu.append(name,"win."+name);
-            var actions=new SimpleActionGroup();
-            foreach(string name in new string[]{"copy","cut","paste","select-all","source","mute"}){
-                if((name=="cut" || name=="paste") && !data.get_boolean_member("editable"))continue;
-                if(name=="copy" && selection=="")continue;
-                if(name=="mute" && data.get_int_member("media")==0)continue;
-                string command_name=name;var item=new SimpleAction(name,null);item.activate.connect(()=>surface.engine.command(command_name));actions.add_action(item);menu.append(name,"context."+name);
-            }
-            if(source!=""){
-                var save=new SimpleAction("save-media",null);save.activate.connect(()=>surface.engine.command("download:"+source));actions.add_action(save);menu.append(_("Save Media As…"),"context.save-media");
-                var copy=new SimpleAction("copy-media",null);copy.activate.connect(()=>get_clipboard().set_text(source));actions.add_action(copy);menu.append(_("Copy Media Address"),"context.copy-media");
-            }
-            if(link!=""){
-                var open=new SimpleAction("open-link",null);open.activate.connect(()=>add_tab(link));actions.add_action(open);menu.append(_("Open Link in New Tab"),"context.open-link");
-                var copy=new SimpleAction("copy-link",null);copy.activate.connect(()=>get_clipboard().set_text(link));actions.add_action(copy);menu.append(_("Copy Link"),"context.copy-link");
-                var window=new SimpleAction("window-link",null);window.activate.connect(()=>{var w=new BrowserWindow(app,is_private,false);w.add_tab(link);w.present();});actions.add_action(window);menu.append(_("Open Link in New Window"),"context.window-link");
-            }
-            surface.insert_action_group("context",actions);
-            var pop=new Gtk.PopoverMenu.from_model(menu);pop.set_parent(surface);Gdk.Rectangle point={ (int)data.get_int_member("x"),(int)data.get_int_member("y"),1,1 };pop.pointing_to=point;pop.closed.connect(()=>pop.unparent());pop.popup();
+        private void context_menu(BrowserSurface surface,string description){
+            PageContextMenu.show(app,surface,description,(url,new_window)=>{if(new_window){var window=new BrowserWindow(app,is_private,false);window.add_tab(url);window.present();}else add_tab(url);});
         }
         private void show_records (bool bookmarks) {
             var dialog=new Adw.Dialog();dialog.title=bookmarks?_("Bookmarks"):_("History");dialog.content_width=650;dialog.content_height=600;

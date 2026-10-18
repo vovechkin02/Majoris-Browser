@@ -17,3 +17,7 @@ src/downloads/downloads-dialog.vala
 src/navigation/omnibox.vala
 src/permissions/policy-dialog.vala
 src/settings/import-dialog.vala
+src/ui/page-context-menu.vala
+src/ui/certificate-dialog.vala
+src/settings/browsing-data-dialog.vala
+src/credentials/address-controller.vala

@@ -21,3 +21,5 @@ The supplied task's manual scenario remains mandatory and unexecuted: install Go
 Use a consenting human's account for authentication; never embed credentials in tests or fixtures. Deterministic fixtures live in tests/fixtures and run through a loopback-only test HTTP server. Check localStorage, IndexedDB, Cache Storage, service-worker storage and HTTP cache in addition to cookies before qualifying the full data-clearing feature.
 
 Reject release while any release-blocking item in implementation-status.md remains unresolved. Record actual results and engine/platform versions rather than treating a checked-in checklist as evidence of manual verification.
+
+The final suite has 20 required groups; scripts/verify-package.py enforces the exact set. GTK 4.18, libpsl and AT-SPI/XTest test prerequisites are required. Public OSR AX action dispatch, PiP and absent task PID/network fields must remain explicitly qualified as described in implementation-status.md. X11 WM_CLASS fixture success does not qualify the Majoris dock or Wayland app identity.

@@ -11,7 +11,7 @@ namespace MajorisBrowser {
         public WebApp? webapp;
         public bool private_requested;
         private bool runtime_started;
-        private bool clear_on_exit;
+        private ExitOperation exit_operation=new ExitOperation();
         public Application (ProfilePaths paths,WebApp? app,bool private_requested) throws Error {
             Object (application_id: app != null ? app.application_id : "com.majoris.browser", flags: ApplicationFlags.HANDLES_OPEN);
             this.paths=paths; this.webapp=app; this.private_requested=private_requested;
@@ -25,10 +25,10 @@ namespace MajorisBrowser {
         protected override void startup () {
             base.startup ();
             notify["active-window"].connect(()=>sessions.changed());
-            var action = new SimpleAction ("new-window",null); action.activate.connect (() => new BrowserWindow (this,false).present ()); add_action (action);
-            action = new SimpleAction ("private-window",null); action.activate.connect (() => new BrowserWindow (this,true).present ()); add_action (action);
+            var action = new SimpleAction ("new-window",null); action.activate.connect (() => {if(webapp==null)new BrowserWindow(this,false).present();else new WebAppWindow(this,webapp).present();}); add_action (action);
+            action = new SimpleAction ("private-window",null);action.set_enabled(webapp==null);action.activate.connect (() => new BrowserWindow (this,true).present ()); add_action (action);
             set_accels_for_action ("app.new-window", {"<Control>n"}); set_accels_for_action ("app.private-window", {"<Control><Shift>n"});
-            action=new SimpleAction("quit",null);action.activate.connect(()=>{sessions.begin_shutdown();var windows=new Gee.ArrayList<Gtk.Window>();foreach(var window in get_windows())windows.add(window);foreach(var window in windows)window.close();});add_action(action);set_accels_for_action("app.quit",{"<Control>q"});
+            action=new SimpleAction("quit",null);action.activate.connect(()=>request_exit.begin(false));add_action(action);set_accels_for_action("app.quit",{"<Control>q"});
             action=new SimpleAction("reload-permissions",null);action.activate.connect(()=>permissions.reload());add_action(action);
         }
         private bool ensure_runtime () {
@@ -48,6 +48,7 @@ namespace MajorisBrowser {
             try{var bus=yield Bus.get(BusType.SESSION,null);var args=new VariantBuilder(new VariantType("av"));var platform=new VariantBuilder(new VariantType("a{sv}"));yield bus.call("com.majoris.browser.WebApp."+profile,"/com/majoris/browser/WebApp/"+profile,"org.gtk.Actions","Activate",new Variant("(s@av@a{sv})","reload-permissions",args.end(),platform.end()),null,DBusCallFlags.NO_AUTO_START,1000,null);}catch(Error e){/* A stopped app loads policy on its next launch. */}
         }
         protected override void activate () {
+            cancel_exit();
             if (!ensure_runtime ()) { quit (); return; }
             if (active_window != null) { active_window.present (); return; }
             if (webapp != null) {
@@ -74,6 +75,7 @@ namespace MajorisBrowser {
             }
         }
         protected override void open (File[] files,string hint) {
+            cancel_exit();
             if (!ensure_runtime ()) return;
             if (webapp != null) { activate (); return; }
             BrowserWindow window = active_window as BrowserWindow ?? new BrowserWindow (this,false,false);
@@ -83,19 +85,36 @@ namespace MajorisBrowser {
         protected override void shutdown () {
             downloads.flush();
             sessions.stop();
-            storage.stop (); if (runtime_started) MajorisCef.shutdown ();
-            if(clear_on_exit){try{MajorisCef.clear_profile(paths.browser_context);}catch(Error e){critical("Browser profile clearing: %s",e.message);}}
+            storage.stop (); if (runtime_started) {MajorisCef.shutdown ();runtime_started=false;}
+            if(exit_operation.finish(!runtime_started)){try{MajorisCef.clear_profile(paths.browser_context);}catch(Error e){critical("Browser profile clearing: %s",e.message);}}
             base.shutdown ();
         }
         public void clear_browser_profile () {
             if(webapp!=null)return;
-            clear_on_exit=true;
+            request_exit.begin(true);
+        }
+        public void cancel_exit(){
+            if(exit_operation.phase==ExitPhase.PENDING || exit_operation.phase==ExitPhase.APPROVED){exit_operation.cancel();sessions.closing_all=false;}
+        }
+        private async void request_exit(bool clear){
+            if(webapp!=null){foreach(var window in get_windows())window.close();return;}
+            if(!exit_operation.begin(clear))return;
+            uint64 generation=exit_operation.generation;
+            hold();sessions.begin_shutdown();
             var windows=new Gee.ArrayList<Gtk.Window>();foreach(var window in get_windows())windows.add(window);
             foreach(var window in windows){
-                var host=window as Adw.ApplicationWindow;
-                if(host!=null && host.visible_dialog!=null)host.visible_dialog.force_close();
-                window.close();
+                var browser=window as BrowserWindow;
+                bool accepted=browser==null || (yield browser.close_for_exit());
+                if(generation!=exit_operation.generation){release();return;}
+                if(!accepted){cancel_exit();release();return;}
+                if(exit_operation.phase!=ExitPhase.PENDING){release();return;}
             }
+            foreach(var window in get_windows()){
+                var browser=window as BrowserWindow;
+                if(browser!=null && !browser.closing){cancel_exit();release();return;}
+            }
+            foreach(var window in windows)if(!(window is BrowserWindow))window.close();
+            exit_operation.approve(true);release();
         }
         public void open_external (string url) {
             try {
@@ -120,6 +139,10 @@ int main (string[] args) {
             } else if (arg == "--private") priv=true;
             else remaining += arg;
         }
+        // Set the GTK/X11 program identity before GTK initializes. An app must
+        // not inherit the Browser executable's WM_CLASS or display name.
+        Environment.set_prgname(app!=null?app.application_id:"com.majoris.browser");
+        Environment.set_application_name(app!=null?app.name:_("Majoris Browser"));
         var application=new MajorisBrowser.Application (paths,app,priv);
         application.register (null);
         if(application.is_remote && priv){application.activate_action("private-window",null);application.storage.stop();return 0;}

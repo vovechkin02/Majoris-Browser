@@ -23,6 +23,9 @@ namespace MajorisCef {
         public void set_permissions(string permissions);
         public void close ();
         public void request_close ();
+        public void drag_end(int x,int y,int operation);
+        public void drag_target(int phase,string text,string files,int x,int y);
+        public void set_accessibility(bool enabled);
         public void load (string url);
         public void command (string command);
         public void resize (int width, int height, double scale);
@@ -32,6 +35,7 @@ namespace MajorisCef {
         public void focus (bool focused);
         public void reply (int token, bool accepted, string text);
         public void clear_cookies ();
+        public void clear_http_cache ();
         public void clear_site_cookies (string url);
         public void clear_site_data (string url);
         public void ime (string text, int selection, bool commit);
@@ -40,8 +44,12 @@ namespace MajorisCef {
         public void drop (string text, string files, int x, int y);
         public void set_cookie (string url, string name, string value);
         public void set_cookie_details(string url,string name,string value,string domain,string path,bool secure,bool http_only);
+        public void cookie_inventory();
+        public void set_partitioned_cookie(string url,string name,string value,string top_level_site);
         public void get_cookies (string url);
+        public void allow_auth_for(string url,int seconds);
         public void allow_auth (string url);
+        public bool is_auth_popup();
         public void autofill (string origin, string username, string password);
         public void fill_address (string origin, string fields);
         public void fetch_manifest (string url);
