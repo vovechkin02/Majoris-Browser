@@ -11,6 +11,7 @@ namespace MajorisBrowser {
                 app.threats.check.begin(context,url,cancel,(object,response)=>{
                     ThreatResult result;try{result=app.threats.check.end(response);}catch(Error e){pending.remove(cancel);if(!surface.closed)surface.engine.reply(token,false,"");return;}pending.remove(cancel);
                     if(surface.closed)return;
+                    if(cancel.is_cancelled()){surface.engine.reply(token,false,"");return;}
                     surface.engine.reply(token,!cancel.is_cancelled() && result.verdict==ThreatVerdict.NO_KNOWN_THREAT,"");
                     if(result.dangerous)SecurityWarning.present(surface,url,result);
                     else if(result.verdict!=ThreatVerdict.NO_KNOWN_THREAT)EngineDialogs.show_error(surface,_("Destination check unavailable. This navigation was cancelled; no safety verdict is available."));

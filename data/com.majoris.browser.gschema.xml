@@ -15,4 +15,5 @@
 <key name="setup-complete" type="b"><default>false</default><summary>First-run setup has been presented</summary></key>
 <key name="proxy-address" type="s"><default>''</default><summary>Proxy address; empty uses the system configuration</summary></key>
 <key name="hardware-acceleration" type="b"><default>true</default><summary>Use hardware acceleration after restarting</summary></key>
+<key name="web-risk-consent" type="b"><default>false</default><summary>Authorised Google Web Risk account and consent to send full navigation URLs, including private windows and installed apps, after restart</summary></key>
 </schema></schemalist>

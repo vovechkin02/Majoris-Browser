@@ -1,3 +1,12 @@
+majoris-browser (0.1.0-5) unstable; urgency=medium
+
+  * Integrate opt-in Web Risk Lookup with native consent and Secret Service keys.
+  * Enforce TLS, response/rate limits, cancellation and Google warning attribution.
+  * Qualify adapter transport/errors and app scope separation in required tests.
+  * Retain precise engine, licensed-media and target-desktop release gates.
+
+ -- Majoris Developers <developers@majoris.org>  Sun, 18 Oct 2026 20:00:00 +1100
+
 majoris-browser (0.1.0-4) unstable; urgency=medium
 
   * Add disabled-by-default threat-provider architecture and async navigation gate.

@@ -1,5 +1,30 @@
 # Completion matrix — 18 October 2026
 
+## Final security and compatibility pass (main 97812b08)
+
+This table supersedes earlier snapshots below. The architecture and earlier suites are retained. No live account, licensed media runtime, CDM or Majoris desktop was provided.
+
+| Feature | Implementation status | Runtime verified | Remaining blocker |
+|---|---|---|---|
+| Chromium security updates | Incomplete | Exact SDK/archive and refreshed official index/CNA assessment | Supported fixed SDK or authoritative per-component/backport evidence; release blocked |
+| Phishing protection | External dependency required | Actual Web Risk adapter with disposable HTTPS, Secret Service and native gate fixtures | Authorised account/key, current terms/privacy approval and live service qualification |
+| Malware URL protection | External dependency required | Malware/unwanted/no-match mapping, error/timeout/cancel, TLS/redirect denial | Same live provider dependency; default disabled |
+| Download reputation | External dependency required | Persisted assessments/open restrictions and real isolated downloads | File-content reputation/scanner absent; ordinary files remain not assessed |
+| H.264 playback | External dependency required | Current runtime reports decoder unavailable; VP8/VP9 playback verified | Licensed codec-capable fixed SDK and real H.264/combined qualification |
+| AAC playback | External dependency required | Current runtime reports decoder unavailable; decoded Opus verified | Licensed codec-capable fixed SDK and real AAC/combined qualification |
+| Widevine DRM | External dependency required | Current runtime rejects unavailable CDM | Vendor entitlement/binary, integration and service/VMP qualification; optional |
+| Web-app navigation scopes | Complete and verified | Sheets/Docs/Slides, Excel/Word/Outlook sections, root/custom/manifest/legacy domain fixtures; native auth/popup regressions | Real provider/desktop UX still requires manual qualification |
+| Google Sheets compatibility | Implemented verification pending | Local OAuth, app lifetime, independent data and restarted fixture identities | Real account and Majoris desktop unavailable by user confirmation |
+| Web-app profile isolation | Complete and verified | Real cookies/storage/cache, independent app launches/restarts and clear/uninstall | Real Sheets session verification remains separate |
+| Web accessibility | Upstream limitation | Real AX/AT-SPI text, frame, focus, Unicode, protected/live geometry | Public OSR node-action/edit dispatch absent; Orca/native layout unverified |
+| Picture-in-Picture | Upstream limitation | Actual unsupported result, entry omitted | Alloy OSR rejects PiP; optional |
+| Session restoration | Upstream limitation | URL/window/tab/geometry recovery and private exclusion | No public serialized Chromium navigation-stack import |
+| Task Manager | Upstream limitation | Supported metrics and termination | Public task PID/network/parent metrics absent |
+| Wayland integration | Implemented verification pending | X11 input, drag, clipboard, Unicode and identity fixtures | Native Wayland, IME candidates, dock, scaling/theme unavailable |
+| Debian packaging | Implemented verification pending | Revision 0.1.0-5: fresh-source 24/24, Debian 24/24, archive/extracted GTK/CEF and metadata passed | System installation/upgrade and target desktop gates; production release blocked |
+
+Provider configuration is in security-maintenance.md; complete security triage is in security-assessment.md. Neither successful local fixtures nor a development Debian archive authorises production distribution.
+
 ## Remaining-feature pass (main ff562f9)
 
 | Feature | Status | Verified | Remaining blockers |

@@ -17,6 +17,7 @@ namespace MajorisBrowser {
             Object (application_id: app != null ? app.application_id : "com.majoris.browser", flags: ApplicationFlags.HANDLES_OPEN);
             this.paths=paths; this.webapp=app; this.private_requested=private_requested;
             preferences = new Settings ("com.majoris.browser"); storage = new StoreWorker (paths.browser_store);
+            threats=new ThreatProtectionService(new WebRiskProvider(preferences.get_boolean("web-risk-consent")));
             storage.operation_failed.connect((message)=>{if(active_window!=null)EngineDialogs.show_error(active_window,message);});
             sessions=new SessionService(this);
             permissions=new PermissionService(storage,app==null?"browser":app.id);

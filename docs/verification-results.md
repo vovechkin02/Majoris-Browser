@@ -1,5 +1,19 @@
 # Verification results — 18 October 2026
 
+## Final security and compatibility pass (revision 0.1.0-5)
+
+Starting clean source 97812b08d82270f6d5ad4e343c69f5108622309c matched origin/main. The explicit CEF 152.0.14 / Chromium 152.0.7977.167 SDK, SHA-256 and official availability were rechecked in build/final-security-engine-audit.json. All ten authoritative CNA records were refreshed into build/final-security-cve-assessment.json. No suitable fixed supported replacement was established; production remains blocked.
+
+The new required web-risk-provider test uses the actual adapter with disposable HTTPS and Secret Service. It covers key save/lookup/removal, malware/phishing/unwanted/no-match, malformed and future-type responses, embedded-NUL/64 KiB rejection, 403/429/503 failures, no redirects, a separate untrusted TLS endpoint, process rate limiting and queued recovery, cancellation/timeout, query-aware cache keys, fragment removal, embedded-credential refusal, cached attribution, disabled and missing-key states. No live API/key/account is used. Ordinary rapid redirects queue within a 1.5-second bound rather than failing immediately; cancellation removes the queued callback and provider backoff also applies to queued work.
+
+Final source snapshot: build-clean-security-release/source, output: build-clean-security-release/output. All **24/24** required suites passed with zero failures, skips or timeouts (build/final-security-clean-release.log). The Debian build passed the same exact **24/24** gate (build/final-security-package-release.log). Archive ownership, root-owned mode-4755 sandbox helper, resources/notices, installed library paths and extracted GTK/CEF smoke passed (build/final-security-deb-runtime.log). AppStream/desktop metadata validation and git diff --check passed. Every implementation file was compared with the tested snapshot; only final documentation prose changed afterward.
+
+Final artifacts are in build-packages-security-release/: majoris-browser_0.1.0-5_amd64.deb, **251,274,432 bytes**, SHA-256 **d1c2b6c3201694d125b154cad0291efbcf9d0f148cfc71ec5b1829eb6ccee35b**; debug package, buildinfo/changes, SHA256SUMS, source-input manifest/revision, refreshed engine/CVE records and RELEASE-BLOCKED notice. Both SDK archive digests match their pins. The preliminary build-packages-security-final directory is explicitly superseded; it predates the final queue/backoff changes. The final package remains a development artifact, not production approval.
+
+The download enum appends no-known-file-threat without changing older stored integer values; roundtrip coverage verifies it, but no URL verdict assigns it to a file. Native cancelled-result handling suppresses stale warnings. Additional domain cases distinguish Sheets from Docs/Slides and Excel sections from Word/Outlook, preserving explicit root/custom/manifest/legacy behavior. Existing native popup/auth and app identity/storage suites remain mandatory.
+
+Earlier revision-4 artifacts below are historical and do not contain this adapter. No system installation/upgrade, real Sheets account, Majoris dock, native Wayland, Orca, licensed H.264/AAC playback or Widevine service qualification has been performed. These remain explicit gates.
+
 ## Remaining-feature implementation (revision 0.1.0-4)
 
 Starting source `ff562f916110e9744d6d09b20c95984a2b5c92c7` was clean and matched origin/main (`git ls-remote` through the Linux environment). New source preserves the architecture and all 20 previous suites, adding three required groups. Workspace and final fresh-source runs both passed **23/23**, no failures/skips (`build/remaining-all-tests.log`, `build/remaining-clean-final.log`). Final source is `build-clean-remaining-final/source`, build output `build-clean-remaining-final/output`.

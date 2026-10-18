@@ -45,7 +45,7 @@ with tempfile.TemporaryDirectory(prefix='majoris-package-', dir='/tmp') as temp:
     subprocess.run(['dpkg-buildpackage', '-b', '-uc', '-us'], cwd=source,
                    env=environment, check=True)
     logs = source / 'obj-x86_64-linux-gnu/meson-logs'
-    expected = {'domain', 'threat-protection', 'cef-threat-navigation', 'cef-media-playback', 'cef-close', 'cef-permissions', 'cef-downloads',
+    expected = {'domain', 'threat-protection', 'web-risk-provider', 'cef-threat-navigation', 'cef-media-playback', 'cef-close', 'cef-permissions', 'cef-downloads',
                 'cef-site-cookies', 'cef-storage-isolation', 'cef-credentials',
                 'cef-cookie-isolation', 'cef-native-notifications', 'gtk-smoke',
                 'cef-exit', 'app-uninstall', 'cef-modern-credentials', 'gtk-drag',

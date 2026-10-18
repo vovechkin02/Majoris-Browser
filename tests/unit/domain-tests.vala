@@ -11,6 +11,15 @@ void main (string[] args) {
         try {
             var p = new WebAppNavigationPolicy ("https://docs.google.com/spreadsheets/");
             assert (p.classify ("https://docs.google.com/spreadsheets/abc") == NavigationDecision.APP_SCOPE);
+            assert (p.classify ("https://docs.google.com/document/d/abc/edit") == NavigationDecision.EXTERNAL);
+            assert (p.classify ("https://docs.google.com/presentation/d/abc/edit") == NavigationDecision.EXTERNAL);
+            var excel=new WebAppNavigationPolicy("https://www.microsoft365.com/launch/excel/");
+            assert(excel.classify("https://www.microsoft365.com/launch/excel/workbook?x=1")==NavigationDecision.APP_SCOPE);
+            assert(excel.classify("https://www.microsoft365.com/launch/word/")==NavigationDecision.EXTERNAL);
+            assert(excel.classify("https://www.microsoft365.com/launch/outlook/")==NavigationDecision.EXTERNAL);
+            assert(new WebAppNavigationPolicy("https://example.test/").classify("https://example.test/any/path")==NavigationDecision.APP_SCOPE);
+            var custom=new WebApp("Custom","https://example.test/tools/editor/start","https://example.test/tools/editor/");
+            assert(new WebAppNavigationPolicy(custom.scope).classify("https://example.test/tools/viewer/")==NavigationDecision.EXTERNAL);
             assert (p.classify ("https://docs.google.com.evil.test/spreadsheets/") == NavigationDecision.EXTERNAL);
             assert (p.classify ("https://docs.google.com/spreadsheets-evil/") == NavigationDecision.EXTERNAL);
             assert (p.classify ("https://accounts.google.com/") == NavigationDecision.EXTERNAL);
