@@ -17,12 +17,14 @@ namespace MajorisBrowser {
             Object (application_id: app != null ? app.application_id : "com.majoris.browser", flags: ApplicationFlags.HANDLES_OPEN);
             this.paths=paths; this.webapp=app; this.private_requested=private_requested;
             preferences = new Settings ("com.majoris.browser"); storage = new StoreWorker (paths.browser_store);
-            threats=new ThreatProtectionService(new WebRiskProvider(preferences.get_boolean("web-risk-consent")));
+            bool managed=preferences.get_boolean("web-risk-managed");string endpoint=preferences.get_string("managed-threat-endpoint");bool consent=WebRiskProvider.consent_matches(preferences.get_boolean("web-risk-consent"),managed,endpoint,preferences.get_string("web-risk-consent-target"));
+            try{threats=new ThreatProtectionService(managed?new WebRiskProvider.managed_service(consent,endpoint):new WebRiskProvider(consent));}catch(Error e){ThreatProvider failed=consent?(ThreatProvider)new UnavailableThreatProvider():new UnconfiguredThreatProvider();threats=new ThreatProtectionService(failed);}
             storage.operation_failed.connect((message)=>{if(active_window!=null)EngineDialogs.show_error(active_window,message);});
             sessions=new SessionService(this);
             permissions=new PermissionService(storage,app==null?"browser":app.id);
             permissions.policies_changed.connect((profile)=>{if(ProfilePaths.valid_id(profile) && (webapp==null || webapp.id!=profile))notify_permission_change.begin(profile);});
-            downloads=new DownloadService(this);
+            DownloadSecurityProvider scanner=preferences.get_string("download-scanner-socket")==""?(DownloadSecurityProvider)new NoDownloadScanner():new ClamdDownloadScanner(preferences.get_string("download-scanner-socket"));downloads=new DownloadService(this,scanner);
+            downloads.threat_detected.connect((record)=>{if(active_window!=null)EngineDialogs.show_error(active_window,_("Known threat detected in downloaded file: %s. Opening is blocked. The file has been retained.").printf(record.filename));});
         }
         protected override void startup () {
             base.startup ();

@@ -1,4 +1,23 @@
-# Verification results — 18 October 2026
+# Verification results — 19 October 2026
+
+## Production-readiness pass — revision 0.1.0-6
+
+Reviewed clean main 82684a8c265def0cd06d34d75272cb8e5076ce99, matched origin/main before modification. The selected runtime remains CEF 152.0.14 / Chromium 152.0.7977.167. Current audit: build/production-engine-audit.json; all ten CNA records: build/production-cve-assessment.json; exact CEF and Chromium maintenance source evidence and V8 mappings are recorded alongside the security assessment. Production is not approved.
+
+Targeted download-scanner, real-download, Web Risk and platform regressions passed. Scanner tests cover clean/detected/unavailable/error, multi-chunk streaming, input bounds, symlink/FIFO refusal, path replacement during scan, deadline/cancellation/recovery and no file deletion. Production download-service tests cover pending/open guard, threat blocking, removal cancellation and no resurrection. A separate extracted Debian clamd 1.4.3 daemon reported clean and a harmless original test-signature match via the production adapter, then terminated; only a custom test database was used. No host packages/services were installed. Production signature coverage/freshness is not qualified.
+
+Web Risk fixtures now verify managed bearer credentials isolated from direct keys, provider-bound consent (including mode/endpoint changes), explicit initial/active/auth-error/quota/timeout/missing-key states, expired cache and concurrent normal/app requests. No production endpoint or credentials were supplied. Fullscreen video entry/exit is now asserted rather than only printed. All previous native isolation, media, accessibility and GTK suites remain required. Final clean-source, Debian and extracted-runtime outcomes are appended after execution; no manual account/desktop/system-install passes are claimed.
+
+Final clean snapshot: build-clean-production-qualified/source; output: build-clean-production-qualified/output. The initial fresh-source run completed compilation but reported a media-fixture timeout (24/25), retained in build/production-clean-qualified.log. With unchanged source and assertions, the isolated media test passed three consecutive runs (build/production-media-repeat.log), then the complete fresh-source suite passed **25/25**, no failures/skips/timeouts (build/production-clean-rerun.log). The transient timeout's cause is unproven; no timeout was increased, assertion removed or test skipped. Retain this reliability observation for further release qualification.
+
+The final Debian source build passed the exact **25/25** required set (build/production-package-qualified.log). The checked-in optional real-clamd runner also passed against the final clean-built binary (build/production-real-clamd-final.log), using an extracted Debian daemon and a harmless custom signature only. Every current implementation file matches the tested snapshot; only final documentation prose changed afterward. AppStream/desktop metadata and git diff --check passed. Earlier build-packages-production-final/release directories are preliminary and superseded by build-packages-production-qualified.
+
+Final archive verification and extracted GTK/CEF smoke passed (build/production-deb-runtime.log): ownership, mode-4755 sandbox helper, resources/notices, installed library paths, installed-app identities and storage restart. This is extraction/runtime qualification, not system installation/upgrade.
+
+Retained development artifact: build-packages-production-qualified/majoris-browser_0.1.0-6_amd64.deb, **251,296,060 bytes**, SHA-256 **73fffb51489a271f5fc42477cb400e201d233b6339272c17288e5d2b4b181709**. The directory includes debug symbols, buildinfo/changes, SHA256SUMS, packaged-file RUNTIME-SHA256SUMS, clean source-input manifest/revision, engine/CVE/patch/V8 records, real-scanner and metadata evidence, and RELEASE-BLOCKED.txt. Both engine archive digests match the pins. The final publisher recheck still offers the same supported M152 artifact (build/production-engine-audit-release.json).
+
+No live managed deployment/account, maintained official scanner-signature service, licensed H.264/AAC runtime, CDM, real Sheets/Excel/Outlook account, native Majoris/Wayland/Orca or system installation/upgrade was qualified. Optional upstream limits remain explicit. Production distribution is blocked.
+
 
 ## Final security and compatibility pass (revision 0.1.0-5)
 

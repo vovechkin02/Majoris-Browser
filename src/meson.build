@@ -10,6 +10,7 @@ browser_exe = executable('majoris-browser', domain_sources, config_vapi,
   'application.vala', 'browser-window.vala', 'web-app-window.vala',
   'security/security-warning.vala','security/navigation-security.vala',
   'security/web-risk-provider.vala','settings/threat-provider-dialog.vala',
+  'security/download-security-provider.vala',
   'ui/browser-surface.vala', 'ui/engine-dialogs.vala', 'ui/task-manager.vala',
   'ui/page-actions.vala',
   'ui/page-context-menu.vala',
@@ -34,7 +35,7 @@ browser_exe = executable('majoris-browser', domain_sources, config_vapi,
   'settings/browsing-data-dialog.vala',
   'services/store-worker.vala', 'services/profile-cleaner.vala', 'integration/shell-integration.vala', 'settings/preferences-window.vala', resources,
   dependencies: domain_deps + [gtk, adw, cef_dep, dependency('gio-unix-2.0'), dependency('libsecret-1'), dependency('libsoup-3.0'), dependency('gdk-pixbuf-2.0')],
-  vala_args: ['--target-glib=2.76'], c_args: ['-DGETTEXT_PACKAGE="majoris-browser"'],
+  vala_args: ['--target-glib=2.76','--pkg=posix'], c_args: ['-DGETTEXT_PACKAGE="majoris-browser"'],
   install: true, install_rpath: get_option('prefix') / get_option('libdir') / 'majoris-browser' + ':' + cef_runtime_dir)
 xvfb = find_program('xvfb-run', required: false)
 if xvfb.found() and dbus_session.found()

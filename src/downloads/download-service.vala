@@ -4,6 +4,8 @@ namespace MajorisBrowser {
         private Application app;
         private Gee.HashSet<DownloadRecord> dirty=new Gee.HashSet<DownloadRecord>();
         private uint save_timer;
+        private DownloadSecurityProvider scanner;
+        private Gee.HashMap<DownloadRecord,Cancellable> scans=new Gee.HashMap<DownloadRecord,Cancellable>();
         private Gee.HashMap<MajorisCef.View,string> sessions=new Gee.HashMap<MajorisCef.View,string>();
         public string profile { owned get { return app.webapp==null?"browser":app.webapp.id; } }
         public void attach(MajorisCef.View view,string session=""){sessions[view]=session;}
@@ -13,8 +15,9 @@ namespace MajorisBrowser {
             try{UrlResolver.web_uri(record.source);view.command("download:"+record.source);return true;}catch(Error e){return false;}
         }
         public signal void changed();
-        public DownloadService(Application app){this.app=app;app.storage.run((store)=>{
-            var saved=store.download_records();Idle.add(()=>{foreach(string item in saved)try{var record=DownloadRecord.parse(item);if(record.profile!=(app.webapp==null?"browser":app.webapp.id))continue;if(record.status=="active" || record.status=="paused"){record.status="failed";record.error_detail=_("Browser closed before this download finished.");persist(record);}records.add(record);}catch(Error e){}changed();return Source.REMOVE;});
+        public signal void threat_detected(DownloadRecord record);
+        public DownloadService(Application app,DownloadSecurityProvider? scanner=null){this.app=app;this.scanner=scanner??new NoDownloadScanner();app.storage.run((store)=>{
+            var saved=store.download_records();Idle.add(()=>{foreach(string item in saved)try{var record=DownloadRecord.parse(item);if(record.profile!=(app.webapp==null?"browser":app.webapp.id))continue;if(record.status=="active" || record.status=="paused"){record.status="failed";record.error_detail=_("Browser closed before this download finished.");persist(record);}if(record.assessment==DownloadAssessment.PENDING || record.assessment==DownloadAssessment.NO_KNOWN_THREAT){record.assessment=DownloadAssessment.NOT_ASSESSED;record.assessment_detail="Previous scan is no longer current";persist(record);}records.add(record);}catch(Error e){}changed();return Source.REMOVE;});
         });}
         public void update(MajorisCef.View view,string text,bool ephemeral){
             if(!sessions.has_key(view) || (sessions[view]!="")!=ephemeral)return;
@@ -27,11 +30,22 @@ namespace MajorisBrowser {
                 else if(record.status=="security-check-failed")record.assessment=DownloadAssessment.UNAVAILABLE;
                 if(record.status!="active" && record.status!="paused")record.completed=new DateTime.now_utc().to_unix();
                 persist(record);changed();
+                if(record.status=="complete" && record.assessment==DownloadAssessment.NOT_ASSESSED && scanner.configured)scan.begin(record,record.session);
             }catch(Error e){warning("Downloads: %s",e.message);}
         }
-        public void remove(DownloadRecord record,string session){if(!owns(record,session) || record.status=="active" || record.status=="paused")return;dirty.remove(record);records.remove(record);if(!record.ephemeral)app.storage.run((store)=>store.remove_download(record.id));changed();}
+        public async void scan(DownloadRecord record,string session){
+            if(!owns(record,session) || record.status!="complete" || scans.has_key(record) || record.assessment==DownloadAssessment.MALICIOUS || record.assessment==DownloadAssessment.POLICY_BLOCKED)return;
+            var cancel=new Cancellable();scans[record]=cancel;record.assessment=DownloadAssessment.PENDING;persist(record);changed();
+            FileAssessment result;
+            try{result=yield scanner.assess(record.destination,cancel);}catch(Error e){result=new FileAssessment(DownloadAssessment.SCAN_FAILED,"Scan cancelled or failed");}
+            scans.unset(record);
+            if(!owns(record,session) || record.status!="complete" || record.assessment!=DownloadAssessment.PENDING)return;
+            record.assessment=result.verdict;record.assessment_detail=result.detail;persist(record);changed();if(result.verdict==DownloadAssessment.MALICIOUS)threat_detected(record);
+        }
+        public void cancel_scan(DownloadRecord record,string session){if(owns(record,session) && scans.has_key(record))scans[record].cancel();}
+        public void remove(DownloadRecord record,string session){if(!owns(record,session) || record.status=="active" || record.status=="paused")return;cancel_scan(record,session);dirty.remove(record);records.remove(record);if(!record.ephemeral)app.storage.run((store)=>store.remove_download(record.id));changed();}
         public void clear_completed(string session){var items=new Gee.ArrayList<DownloadRecord>();items.add_all(records);foreach(var record in items)if(record.status=="complete")remove(record,session);}
-        public void clear_history(int64 since){var items=new Gee.ArrayList<DownloadRecord>();items.add_all(records);foreach(var record in items)if(record.profile=="browser" && !record.ephemeral && record.started>=since && record.status!="active" && record.status!="paused"){dirty.remove(record);records.remove(record);}changed();}
+        public void clear_history(int64 since){var items=new Gee.ArrayList<DownloadRecord>();items.add_all(records);foreach(var record in items)if(record.profile=="browser" && !record.ephemeral && record.started>=since && record.status!="active" && record.status!="paused"){cancel_scan(record,record.session);dirty.remove(record);records.remove(record);}changed();}
         public void command(DownloadRecord record,string action,string session){if(owns(record,session) && (action=="pause" || action=="resume" || action=="cancel") && record.control!=null && (record.status=="active" || record.status=="paused"))record.control.command("download-"+action+":"+record.native_id.to_string());}
         private void persist(DownloadRecord record){
             if(record.ephemeral)return;
@@ -43,7 +57,7 @@ namespace MajorisBrowser {
         public void view_closed(MajorisCef.View view){
             string session=sessions.has_key(view)?sessions[view]:"";sessions.unset(view);
             foreach(var record in records)if(record.control==view){if(record.status=="active" || record.status=="paused"){record.status="cancelled";record.completed=new DateTime.now_utc().to_unix();record.error_detail=_("The page hosting this download was closed.");persist(record);}record.control=null;}
-            if(session!="" && !sessions.values.contains(session)){var expired=new Gee.ArrayList<DownloadRecord>();foreach(var record in records)if(record.ephemeral && record.session==session)expired.add(record);foreach(var record in expired){dirty.remove(record);records.remove(record);}}
+            if(session!="" && !sessions.values.contains(session)){var expired=new Gee.ArrayList<DownloadRecord>();foreach(var record in records)if(record.ephemeral && record.session==session)expired.add(record);foreach(var record in expired){cancel_scan(record,session);dirty.remove(record);records.remove(record);}}
             changed();
         }
     }

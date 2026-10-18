@@ -17,7 +17,10 @@ with tempfile.TemporaryDirectory(prefix='majoris-web-risk-') as temporary:
                 assert parsed.path=='/v1/uris:search','Redirect followed'
                 query=urllib.parse.parse_qs(parsed.query)
                 assert query['threatTypes']==['MALWARE','SOCIAL_ENGINEERING','UNWANTED_SOFTWARE']
-                assert self.headers['X-Goog-Api-Key']=='fixture-key-not-a-real-credential'
+                if self.headers.get('Authorization') is not None:
+                    assert self.headers['Authorization']=='Bearer fixture-installation-token'
+                    assert self.headers.get('X-Goog-Api-Key') is None
+                else:assert self.headers['X-Goog-Api-Key']=='fixture-key-not-a-real-credential'
                 assert 'key' not in query
                 target=query['uri'][0];assert '#' not in target
                 name=urllib.parse.urlsplit(target).path.strip('/');requests.append(name)
@@ -49,4 +52,4 @@ with tempfile.TemporaryDirectory(prefix='majoris-web-risk-') as temporary:
     threading.Thread(target=untrusted.serve_forever,daemon=True).start()
     subprocess.run([sys.argv[1],f'https://localhost:{server.server_port}/v1/uris:search',str(cert),f'https://localhost:{untrusted.server_port}/v1/uris:search'],env=env,check=True,timeout=20)
     server.shutdown();untrusted.shutdown();assert not failures,failures
-    assert len(requests)==18,requests
+    assert len(requests)==21,requests

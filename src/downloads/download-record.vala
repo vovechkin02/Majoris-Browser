@@ -14,7 +14,8 @@ namespace MajorisBrowser {
         public string error_detail="";
         public DownloadAssessment assessment=DownloadAssessment.NOT_ASSESSED;
         public bool may_open { get { return status=="complete" && assessment!=DownloadAssessment.PENDING && assessment!=DownloadAssessment.MALICIOUS && assessment!=DownloadAssessment.POLICY_BLOCKED; } }
-        public string assessment_label { owned get { switch(assessment){case DownloadAssessment.NO_KNOWN_THREAT:return "No known file threat";case DownloadAssessment.PENDING:return "Security check pending";case DownloadAssessment.MALICIOUS:return "Known malicious file";case DownloadAssessment.UNAVAILABLE:return "Security check unavailable";case DownloadAssessment.POLICY_BLOCKED:return "Blocked by security policy";default:return "Security: not assessed";} } }
+        public string assessment_label { owned get { switch(assessment){case DownloadAssessment.NO_KNOWN_THREAT:return "No threat detected (not a safety guarantee)";case DownloadAssessment.SCAN_FAILED:return "Scan failed";case DownloadAssessment.PENDING:return "Scanning";case DownloadAssessment.MALICIOUS:return "Known malicious file";case DownloadAssessment.UNAVAILABLE:return "Security check unavailable";case DownloadAssessment.POLICY_BLOCKED:return "Blocked by security policy";default:return "Security: not assessed";} } }
+        public string assessment_detail="";
         public bool ephemeral;
         // In-memory only. Private context keys must never be serialized.
         public string session="";
@@ -30,10 +31,10 @@ namespace MajorisBrowser {
         public uint native_id;
         public MajorisCef.View? control;
         public string serialize(){var b=new Json.Builder();b.begin_object();
-            b.set_member_name("assessment");b.add_int_value((int)assessment);
+            b.set_member_name("assessment_detail");b.add_string_value(assessment_detail);b.set_member_name("assessment");b.add_int_value((int)assessment);
             string[] keys={"id","profile","source","destination","filename","status","error"};string[] values={id,profile,source,destination,filename,status,error_detail};for(int i=0;i<keys.length;i++){b.set_member_name(keys[i]);b.add_string_value(values[i]);}
             string[] counts={"received","total","started","completed"};int64[] numbers={received,total,started,completed};for(int i=0;i<counts.length;i++){b.set_member_name(counts[i]);b.add_int_value(numbers[i]);}b.end_object();var g=new Json.Generator();g.set_root(b.get_root());return g.to_data(null);
         }
-        public static DownloadRecord parse(string text) throws Error {var p=new Json.Parser();p.load_from_data(text);var o=p.get_root().get_object();var d=new DownloadRecord();if(o.has_member("assessment")){int state=(int)o.get_int_member("assessment");if(state>=0 && state<=(int)DownloadAssessment.NO_KNOWN_THREAT)d.assessment=(DownloadAssessment)state;}if(o.has_member("profile"))d.profile=o.get_string_member("profile");d.id=o.get_string_member("id");d.source=o.get_string_member("source");d.destination=o.get_string_member("destination");d.filename=o.get_string_member("filename");d.status=o.get_string_member("status");d.error_detail=o.get_string_member("error");d.received=o.get_int_member("received");d.total=o.get_int_member("total");d.started=o.get_int_member("started");d.completed=o.get_int_member("completed");return d;}
+        public static DownloadRecord parse(string text) throws Error {var p=new Json.Parser();p.load_from_data(text);var o=p.get_root().get_object();var d=new DownloadRecord();if(o.has_member("assessment_detail"))d.assessment_detail=o.get_string_member("assessment_detail");if(o.has_member("assessment")){int state=(int)o.get_int_member("assessment");if(state>=0 && state<=(int)DownloadAssessment.SCAN_FAILED)d.assessment=(DownloadAssessment)state;}if(o.has_member("profile"))d.profile=o.get_string_member("profile");d.id=o.get_string_member("id");d.source=o.get_string_member("source");d.destination=o.get_string_member("destination");d.filename=o.get_string_member("filename");d.status=o.get_string_member("status");d.error_detail=o.get_string_member("error");d.received=o.get_int_member("received");d.total=o.get_int_member("total");d.started=o.get_int_member("started");d.completed=o.get_int_member("completed");return d;}
     }
 }

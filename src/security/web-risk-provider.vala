@@ -1,13 +1,15 @@
 namespace MajorisBrowser {
     // Separate from website credentials and from every browsing profile.
     public class ThreatProviderSecret : Object {
+        private string provider_id;
+        public ThreatProviderSecret(string provider_id="google-web-risk"){this.provider_id=provider_id;}
         private Secret.Schema schema=new Secret.Schema("com.majoris.browser.ThreatProvider",Secret.SchemaFlags.NONE,"provider",Secret.SchemaAttributeType.STRING,null);
         public async void save(string key,Cancellable? cancel=null) throws Error {
             if(key.strip()=="" || key.length>512 || key.contains("\n") || key.contains("\r"))throw new IOError.INVALID_ARGUMENT("Invalid provider key");
-            if(!yield Secret.password_store(schema,Secret.COLLECTION_DEFAULT,"Majoris Browser · Google Web Risk",key,cancel,"provider","google-web-risk",null))throw new IOError.FAILED("Provider key could not be stored");
+            if(!yield Secret.password_store(schema,Secret.COLLECTION_DEFAULT,"Majoris Browser · Threat Protection",key,cancel,"provider",provider_id,null))throw new IOError.FAILED("Provider key could not be stored");
         }
-        public virtual async string? load(Cancellable cancel) throws Error {return yield Secret.password_lookup(schema,cancel,"provider","google-web-risk",null);}
-        public async void remove() throws Error {yield Secret.password_clear(schema,null,"provider","google-web-risk",null);}
+        public virtual async string? load(Cancellable cancel) throws Error {return yield Secret.password_lookup(schema,cancel,"provider",provider_id,null);}
+        public async void remove() throws Error {yield Secret.password_clear(schema,null,"provider",provider_id,null);}
     }
 
     public class WebRiskProvider : ThreatProvider {
@@ -17,13 +19,26 @@ namespace MajorisBrowser {
         private string endpoint="https://webrisk.googleapis.com/v1/uris:search";
         private int64 next_request;
         private int64 backoff_until;
+        private bool managed;
+        private ThreatServiceState health=ThreatServiceState.NOT_CONFIGURED;
+        private uint health_timer;
+        public override ThreatServiceState state {get{return health;}}
+        private void set_health(ThreatServiceState value){if(health_timer!=0){Source.remove(health_timer);health_timer=0;}if(health!=value){health=value;notify_property("state");}if(value==ThreatServiceState.ACTIVE)health_timer=Timeout.add_seconds(60,()=>{health_timer=0;set_health(ThreatServiceState.UNAVAILABLE);return Source.REMOVE;});}
+        public override void report_timeout(){if(enabled)set_health(ThreatServiceState.TEMPORARILY_UNAVAILABLE);}
+        private ThreatResult failed(ThreatServiceState value){set_health(value);return new ThreatResult(ThreatVerdict.CHECK_FAILED);}
         public override bool configured {get{return enabled;}}
-        public WebRiskProvider(bool consent,ThreatProviderSecret? secret=null){enabled=consent;this.secret=secret??new ThreatProviderSecret();session.timeout=3;session.user_agent="Majoris-Browser-WebRisk/1";}
+        public WebRiskProvider(bool consent,ThreatProviderSecret? secret=null){enabled=consent;health=consent?ThreatServiceState.UNAVAILABLE:ThreatServiceState.NOT_CONFIGURED;this.secret=secret??new ThreatProviderSecret();session.timeout=3;session.user_agent="Majoris-Browser-WebRisk/1";}
+        public static void validate_managed_endpoint(string endpoint) throws Error {var uri=UrlResolver.web_uri(endpoint);if(uri.get_scheme()!="https" || uri.get_query()!=null || uri.get_fragment()!=null)throw new IOError.INVALID_ARGUMENT("Managed service requires an HTTPS endpoint without credentials, query or fragment");}
+        public static bool consent_matches(bool consent,bool managed,string endpoint,string target){return consent && (managed?endpoint!="" && target==endpoint:target=="" || target=="google-web-risk");}
+        public WebRiskProvider.managed_service(bool consent,string endpoint,ThreatProviderSecret? secret=null) throws Error {
+            this(consent,secret??new ThreatProviderSecret("managed-web-risk"));validate_managed_endpoint(endpoint);this.endpoint=endpoint;managed=true;
+        }
         // Test injection is constrained to loopback; production has no endpoint setting.
-        internal WebRiskProvider.fixture(ThreatProviderSecret secret,string endpoint,string certificate) throws Error {
+        internal WebRiskProvider.fixture(ThreatProviderSecret secret,string endpoint,string certificate,bool managed=false) throws Error {
             this(true,secret);var uri=Uri.parse(endpoint,UriFlags.NONE);
             if(uri.get_scheme()!="https" || uri.get_host()!="localhost" || uri.get_userinfo()!=null)throw new IOError.INVALID_ARGUMENT("Fixture requires localhost HTTPS");
             this.endpoint=endpoint;
+            this.managed=managed;
             session.tls_database=TlsFileDatabase.new(certificate);
         }
         public static string destination(string url) throws Error {
@@ -43,19 +58,19 @@ namespace MajorisBrowser {
             if(!enabled)return new ThreatResult(ThreatVerdict.UNKNOWN);
             string target=destination(url);
             int64 now=get_monotonic_time(),slot=int64.max(now,next_request);
-            if(now<backoff_until)return new ThreatResult(ThreatVerdict.CHECK_FAILED);
+            if(now<backoff_until)return failed(ThreatServiceState.TEMPORARILY_UNAVAILABLE);
             // Space ordinary redirects without failing them merely for being
             // fast. Bound queueing below the service deadline; backoff fails closed.
-            if(slot-now>1500000)return new ThreatResult(ThreatVerdict.CHECK_FAILED);
+            if(slot-now>1500000)return failed(ThreatServiceState.TEMPORARILY_UNAVAILABLE);
             next_request=slot+1000000;
             if(slot>now)yield wait_slot((uint)((slot-now+999)/1000),cancel);
-            if(get_monotonic_time()<backoff_until)return new ThreatResult(ThreatVerdict.CHECK_FAILED);
-            string? key=yield secret.load(cancel);
-            if(key==null)return new ThreatResult(ThreatVerdict.CHECK_FAILED);
-            if(key=="" || key.length>512 || key.contains("\n") || key.contains("\r")){Secret.password_wipe(key);return new ThreatResult(ThreatVerdict.CHECK_FAILED);}
+            if(get_monotonic_time()<backoff_until)return failed(ThreatServiceState.TEMPORARILY_UNAVAILABLE);
+            string? key;try{key=yield secret.load(cancel);}catch(Error e){if(!cancel.is_cancelled())set_health(ThreatServiceState.UNAVAILABLE);throw e;}
+            if(key==null)return failed(ThreatServiceState.UNAVAILABLE);
+            if(key=="" || key.length>512 || key.contains("\n") || key.contains("\r")){Secret.password_wipe(key);return failed(ThreatServiceState.SERVICE_ERROR);}
             var message=new Soup.Message("GET",endpoint+"?threatTypes=MALWARE&threatTypes=SOCIAL_ENGINEERING&threatTypes=UNWANTED_SOFTWARE&uri="+Uri.escape_string(target,null,false));
             message.set_flags(Soup.MessageFlags.NO_REDIRECT);
-            message.request_headers.append("X-Goog-Api-Key",key);Secret.password_wipe(key);key=null;
+            string header=managed?"Authorization":"X-Goog-Api-Key";message.request_headers.append(header,managed?"Bearer "+key:key);Secret.password_wipe(key);key=null;
             try{
                 var stream=yield session.send_async(message,Priority.DEFAULT,cancel);
                 if(message.status_code!=200){
@@ -65,13 +80,13 @@ namespace MajorisBrowser {
                         backoff_until=get_monotonic_time()+int64.min(seconds,600)*1000000;
                         next_request=int64.max(next_request,backoff_until);
                     }
-                    yield stream.close_async(Priority.DEFAULT,cancel);return new ThreatResult(ThreatVerdict.CHECK_FAILED);
+                    yield stream.close_async(Priority.DEFAULT,cancel);return failed(message.status_code==429 || message.status_code>=500?ThreatServiceState.TEMPORARILY_UNAVAILABLE:ThreatServiceState.SERVICE_ERROR);
                 }
                 var body=new ByteArray();
                 while(true){var chunk=yield stream.read_bytes_async(4096,Priority.DEFAULT,cancel);if(chunk.get_size()==0)break;if(body.len+chunk.get_size()>65536)throw new IOError.INVALID_DATA("Provider response too large");foreach(uint8 value in chunk.get_data())if(value==0)throw new IOError.INVALID_DATA("Invalid response encoding");body.append(chunk.get_data());}
                 yield stream.close_async(Priority.DEFAULT,cancel);body.append({0});
-                return parse_response((string)body.data);
-            }finally{message.request_headers.remove("X-Goog-Api-Key");}
+                var answer=parse_response((string)body.data);set_health(ThreatServiceState.ACTIVE);return answer;
+            }catch(Error e){bool transport=(e is IOError) && !(e is IOError.INVALID_DATA);if(!cancel.is_cancelled())set_health(transport?ThreatServiceState.TEMPORARILY_UNAVAILABLE:ThreatServiceState.SERVICE_ERROR);throw e;}finally{message.request_headers.remove(header);}
         }
         internal static ThreatResult parse_response(string text) throws Error {
             var parser=new Json.Parser();parser.load_from_data(text);var root=parser.get_root();

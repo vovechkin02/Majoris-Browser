@@ -3,6 +3,8 @@ namespace MajorisBrowser {
     // The default implementation never represents a configured remote service.
     public abstract class ThreatProvider : Object {
         public abstract bool configured { get; }
+        public virtual ThreatServiceState state {get{return configured?ThreatServiceState.UNAVAILABLE:ThreatServiceState.NOT_CONFIGURED;}}
+        public virtual void report_timeout(){}
         public abstract async ThreatResult lookup(string url_sha256,Cancellable cancellable) throws Error;
         // URL-aware providers must explicitly override both methods. Existing
         // hash-only providers retain their privacy contract.
@@ -12,5 +14,10 @@ namespace MajorisBrowser {
     public class UnconfiguredThreatProvider : ThreatProvider {
         public override bool configured { get { return false; } }
         public override async ThreatResult lookup(string hash,Cancellable cancellable) throws Error {return new ThreatResult(ThreatVerdict.UNKNOWN);}
+    }
+    public class UnavailableThreatProvider : ThreatProvider {
+        public override bool configured {get{return true;}}
+        public override ThreatServiceState state {get{return ThreatServiceState.SERVICE_ERROR;}}
+        public override async ThreatResult lookup(string hash,Cancellable cancel) throws Error {return new ThreatResult(ThreatVerdict.CHECK_FAILED);}
     }
 }

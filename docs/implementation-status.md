@@ -1,4 +1,28 @@
-# Completion matrix — 18 October 2026
+# Completion matrix — 19 October 2026
+
+## Authoritative production-readiness matrix (main 82684a8)
+
+This matrix supersedes every historical matrix below. Local implementation/fixtures do not qualify production accounts, maintained signature distribution, licensed codecs or unavailable target desktops.
+
+| Feature | Implemented | Verified | Remaining limitation |
+|---|---|---|---|
+| Chromium security | Partially implemented: precise patch assessment | Pin, official index, exact CEF source and upstream maintenance/V8 patches | Security-fixed supported SDK/custom build not integrated or qualified; release blocked |
+| Phishing protection | Managed/direct client complete | HTTPS, credentials, verdicts, cache expiry, concurrency and health fixtures | External dependency: authorised managed deployment/account/terms and live qualification |
+| Malware URL protection | Same client integration | Same local error/privacy/gate tests | Same external service dependency; default disabled |
+| Download malware scanning | Complete optional clamd integration | Protocol, lifecycle and real disposable clamd with harmless signature | Requires configured supported daemon and maintained production signatures; default disabled |
+| H.264 | Prepared runtime path | Current decoder unavailable; VP8/VP9 regression | External licensed codec-capable fixed SDK and real playback qualification |
+| AAC | Prepared runtime path | Current decoder unavailable; decoded Opus regression | Same external codec dependency |
+| Widevine | Explicit unsupported state | Unavailable CDM result | Optional external vendor/DRM/service entitlement |
+| Accessibility | Maximum supported existing AX bridge retained | Real AX/AT-SPI regression | Upstream node-action/edit API limitation; Orca/native desktop pending |
+| Picture-in-Picture | Intentionally unavailable action | Exact source and runtime refusal | Upstream Alloy OSR limitation; optional |
+| Session restoration | Existing URL/window/tab recovery retained | Lifecycle/session regression | Upstream full navigation-stack import absent |
+| Task Manager | Supported metrics/termination retained | Actual runtime regression | Upstream PID/network/parent fields absent |
+| Web-app runtime | Existing minimal isolated app windows retained | Installation, identity, storage, auth/routing and lifecycle fixtures | Real-provider/native-desktop qualification pending |
+| Google Sheets | Implemented, verification pending | Local app/auth/isolation fixtures | Authorised account/Majoris desktop unavailable as already confirmed; also real Excel/Outlook unverified |
+| Cookie isolation | Complete and verified | Real contexts/storage/restart/clearing | Real-account session check remains separate |
+| Wayland | Implemented, verification pending | X11/input/clipboard/drag regression | Native Wayland/IME/dock/scaling/theme unavailable |
+| Debian packaging | Implemented, verification pending | Revision 0.1.0-6: final clean rerun 25/25, Debian 25/25, archive/extracted runtime and metadata passed | Actual system installation/upgrade and Majoris desktop pending; production blocked |
+
 
 ## Final security and compatibility pass (main 97812b08)
 

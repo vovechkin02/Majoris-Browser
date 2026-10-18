@@ -1,3 +1,13 @@
+majoris-browser (0.1.0-6) unstable; urgency=medium
+
+  * Add optional local clamd streaming scans, bounded I/O and accurate file states.
+  * Integrate scan cancellation, blocked opening and signature-age reporting.
+  * Add managed Web Risk contract/configuration and observable runtime health.
+  * Qualify provider concurrency/cache expiry and actual fullscreen transitions.
+  * Preserve explicit engine, service, licensed-media and desktop release gates.
+
+ -- Majoris Developers <developers@majoris.org>  Sun, 18 Oct 2026 21:00:00 +1100
+
 majoris-browser (0.1.0-5) unstable; urgency=medium
 
   * Integrate opt-in Web Risk Lookup with native consent and Secret Service keys.

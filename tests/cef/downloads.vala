@@ -4,6 +4,23 @@ namespace MajorisBrowser { public class Application : Object {
     public StoreWorker storage;public WebApp? webapp;
     public Application(string path){storage=new StoreWorker(path);}
 }}
+class AssessmentFixture : DownloadSecurityProvider {
+    public bool hang;
+    public override bool configured {get{return true;}}
+    public override async FileAssessment assess(string path,Cancellable cancel) throws Error {
+        if(hang){SourceFunc resume=assess.callback;ulong handler=cancel.cancelled.connect(()=>Idle.add((owned)resume));yield;cancel.disconnect(handler);cancel.set_error_if_cancelled();}
+        return new FileAssessment(DownloadAssessment.MALICIOUS,"Harmless scanner fixture verdict");
+    }
+}
+async void verify_assessment(MajorisBrowser.Application owner){
+    var fixture=new AssessmentFixture();var service=new DownloadService(owner,fixture);var record=new DownloadRecord();record.status="complete";service.records.add(record);
+    yield service.scan(record,"");assert(record.assessment==DownloadAssessment.MALICIOUS && !record.may_open);
+    record.assessment=DownloadAssessment.NOT_ASSESSED;fixture.hang=true;bool finished=false;
+    service.scan.begin(record,"",(object,response)=>{service.scan.end(response);finished=true;});assert(record.assessment==DownloadAssessment.PENDING && !record.may_open);service.remove(record,"");
+    while(!finished){SourceFunc resume=verify_assessment.callback;Idle.add((owned)resume);yield;}
+    assert(!service.records.contains(record));
+    stdout.printf("Production download service: pending/open guard, threat block, cancellation on removal and no resurrection: PASS\n");
+}
 int main(string[] args){
     try{var blocked=new DownloadRecord();blocked.status="complete";blocked.assessment=DownloadAssessment.MALICIOUS;assert(!DownloadRecord.parse(blocked.serialize()).may_open);blocked.assessment=DownloadAssessment.POLICY_BLOCKED;assert(!DownloadRecord.parse(blocked.serialize()).may_open);blocked.assessment=DownloadAssessment.PENDING;assert(!blocked.may_open);blocked.assessment=DownloadAssessment.NO_KNOWN_THREAT;assert(DownloadRecord.parse(blocked.serialize()).assessment==DownloadAssessment.NO_KNOWN_THREAT);blocked.assessment=DownloadAssessment.NOT_ASSESSED;assert(blocked.may_open);}catch(Error e){error("%s",e.message);}
     if(args.length==3 && args[1]=="--verify-store"){
@@ -11,6 +28,7 @@ int main(string[] args){
     }
     try{MajorisCef.initialize(args[3],args[1],args[2]);}catch(Error e){error("%s",e.message);}
     var owner=new MajorisBrowser.Application(Path.build_filename(args[3],"service.db"));var service=new DownloadService(owner);
+    verify_assessment.begin(owner);
     var foreign=new DownloadRecord();foreign.profile="other-installed-app";service.records.add(foreign);assert(!service.owns(foreign,""));service.remove(foreign,"");assert(service.records.contains(foreign));service.records.remove(foreign);
     var view=new MajorisCef.View(Path.build_filename(args[3],"browser"),false,"about:blank");service.attach(view);
     var secret=new MajorisCef.View("private-one",true,"about:blank");service.attach(secret,"private-one");
