@@ -1,3 +1,14 @@
+majoris-browser (0.1.0-7) unstable; urgency=medium
+
+  * Add pinned custom CEF/Chromium source acquisition, patches and provenance.
+  * Add native codec development configuration and Linux Chromium PiP.
+  * Route real AX actions and editable text through GTK/AT-SPI.
+  * Restore safe Chromium navigation entries without URL or POST replay.
+  * Expose native PID/network/root-task metrics with standard SDK fallbacks.
+  * Require history and native PiP regressions and retain redistribution gates.
+
+ -- Majoris Developers <developers@majoris.org>  Mon, 19 Oct 2026 09:53:00 +1100
+
 majoris-browser (0.1.0-6) unstable; urgency=medium
 
   * Add optional local clamd streaming scans, bounded I/O and accurate file states.

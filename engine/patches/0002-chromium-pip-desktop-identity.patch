@@ -1,0 +1,35 @@
+--- a/chrome/browser/ui/views/overlay/video_overlay_window_views.cc
++++ b/chrome/browser/ui/views/overlay/video_overlay_window_views.cc
+@@ -4,6 +4,7 @@
+ 
+ #include "chrome/browser/ui/views/overlay/video_overlay_window_views.h"
+ 
++#include <cstdlib>
+ #include <memory>
+ #include <string>
+ 
+@@ -365,6 +366,24 @@
+       gfx::RoundedCornersF(chromeos::kPipRoundedCornerRadius);
+ #endif
+ 
++#if BUILDFLAG(IS_LINUX)
++  // Majoris runs installed applications in separate processes. CHROME_DESKTOP
++  // is assigned by its trusted launcher before CEF starts, never by web content.
++  // Keep the native Chromium video surface/controller and use that process's
++  // desktop identity for both X11 and Wayland (Brave's overlay is the reference).
++  if (const char* desktop = std::getenv("CHROME_DESKTOP")) {
++    std::string identity(desktop);
++    if (identity.ends_with(".desktop")) identity.resize(identity.size() - 8);
++    if (!identity.empty() && identity.size() <= 255 &&
++        identity.find_first_not_of(
++            "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-") ==
++            std::string::npos) {
++      params.wm_class_name = identity;
++      params.wm_class_class = identity;
++      params.wayland_app_id = identity;
++    }
++  }
++#endif
+   overlay_window->Init(std::move(params));
+   overlay_window->OnRootViewReady();
+ 

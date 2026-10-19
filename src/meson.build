@@ -18,6 +18,7 @@ browser_exe = executable('majoris-browser', domain_sources, config_vapi,
   'ui/web-drag.vala',
   'ui/web-drop.vala',
   'ui/web-accessibility.vala',
+  'ui/gtk-editable-native.vapi',
   'credentials/credential-store.vala', 'credentials/credential-dialog.vala',
   'credentials/credential-controller.vala',
   'credentials/credential-manager.vala',
@@ -39,6 +40,8 @@ browser_exe = executable('majoris-browser', domain_sources, config_vapi,
   install: true, install_rpath: get_option('prefix') / get_option('libdir') / 'majoris-browser' + ':' + cef_runtime_dir)
 xvfb = find_program('xvfb-run', required: false)
 if xvfb.found() and dbus_session.found()
+  pip_test=executable('gtk-pip-test',pip_sources,'../native/cef/vala/majoris-cef.vapi',dependencies:[gio,gtk,gee,json,cef_dep],c_args:['-DGETTEXT_PACKAGE="majoris-browser"'])
+  test('cef-native-pip',dbus_session,args:['--',xvfb.full_path(),'-a',python.full_path(),meson.project_source_root()/'tests/integration/pip-runner.py',pip_test.full_path(),meson.project_build_root()/'native/cef/majoris-browser-cef-subprocess',cef_root/'Release',meson.project_source_root()/'tests/fixtures'],timeout:180,is_parallel:false)
   a11y_test=executable('gtk-accessibility-test',accessibility_sources,'../native/cef/vala/majoris-cef.vapi',dependencies:[gio,gtk,gee,json,cef_dep],c_args:['-DGETTEXT_PACKAGE="majoris-browser"'])
   test('gtk-accessibility',dbus_session,args:['--',xvfb.full_path(),'-a',python.full_path(),meson.project_source_root()/'tests/integration/accessibility-runner.py',a11y_test.full_path(),meson.project_build_root()/'native/cef/majoris-browser-cef-subprocess',cef_root/'Release',meson.project_source_root()/'tests/fixtures'],timeout:50,is_parallel:false)
   drag_test=executable('gtk-drag-test',drag_sources,'../native/cef/vala/majoris-cef.vapi',dependencies:[gio,gtk,gee,json,cef_dep],c_args:['-DGETTEXT_PACKAGE="majoris-browser"'])

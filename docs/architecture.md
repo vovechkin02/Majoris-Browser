@@ -1,3 +1,53 @@
+# Custom engine integration — 19 October 2026
+
+The application remains Vala/GTK4/libadwaita with the existing C++ CEF bridge.
+`engine/` adds a pinned CEF 7977 / Chromium 152.0.7977.169 source build. Its
+versioned C extension symbols are discovered from the loaded libcef.so;
+standard SDKs expose no such symbols and preserve their existing fallbacks.
+See [engine internals and provenance](../engine/README.md) and
+[patch maintenance](../engine/PATCH-MAINTENANCE.md).
+
+PiP retains Chromium's native manager, video controller, surface and Views
+overlay. The Linux overlay receives the launcher's browser/app desktop identity.
+The media menu uses a generation-bound hit-tested video; navigation, renderer
+failure and close invalidate stale actions. The global action accepts one
+unambiguous playing video. No GTK imitation video window or external player is
+used.
+
+CEF OSR uses tree-only AX mode. A bounded WebContents-owned cache of the actual
+engine updates validates node existence and document/frame/browser ownership;
+it does not assume Chromium's native accessibility manager exists. GTK AX model
+widgets expose public widget actions and GtkEditable requests. Reads remain
+authoritative AX text; no synthetic entry buffer is exposed. Protected text
+permits focus but denies reads/writes and default actions. The local Vala
+interface binding describes GtkEditable's actual public C vtable, avoiding the
+distro binding's nonexistent virtual set_text member.
+
+GTK 4.18's [AT-SPI Text implementation](https://github.com/GNOME/gtk/blob/gtk-4-18/gtk/a11y/gtkatspitext.c)
+returns `G_DBUS_ERROR_NOT_SUPPORTED` for `GtkAccessibleText` SetCaretOffset
+(lines 92–95) and Add/Remove/SetSelection (343–354). Its older GtkEditable
+Text fallback requires an actual GtkText delegate for Pango layout/boundary
+queries; a model-only editable has none. Replacing the authoritative AX text
+with a synthetic GtkText buffer would compromise the current text model.
+Majoris therefore exposes native focus, value editing and a select-all action,
+while direct arbitrary AT-SPI Text selection/caret setters remain an upstream
+GTK integration dependency. Chromium's validated selection ABI is implemented.
+
+Normal browser session snapshots can include bounded, versioned serialized
+Chromium navigation entries. Restore occurs before initial navigation, into an
+unused controller. It validates exact runtime/profile identity and refuses POST
+bodies, file references, unsafe URLs and malformed or oversized data. Only the
+selected restored entry loads; earlier URLs are not replayed. A 16 MiB aggregate
+history budget preserves URL snapshots for excess tabs. Private views and
+installed-app scopes do not capture or restore this state.
+
+Task metrics reuse CEF's observer lifecycle and Chromium task IDs. Custom
+runtimes additionally provide real PID, network bytes/second and root-task ID.
+The UI distinguishes per-task network from shared process CPU/memory; a root
+task is not presented as a complete operating-system process hierarchy.
+
+## Earlier standard-SDK records
+
 # Architecture and engine contract
 
 Current additions retain the existing service boundaries. DownloadSecurityProvider has NoDownloadScanner and ClamdDownloadScanner implementations; no remote scanner is shipped. A configured clamd Unix socket is queried with VERSIONCOMMANDS and receives bounded INSTREAM chunks through a worker thread, not a shell command. One scan per process, 64 MiB input and a 30-second total deadline bound client work. Cancellation interrupts socket I/O; symlinks/special files and changed/replaced files are rejected. The daemon controls archive/engine limits; these must be configured by the operator. Daemon version/date and reported age are displayed, with unknown freshness when unavailable. Files are never deleted or executed. The download service persists scanning/verdict states, blocks opening pending/detected files, cancels removed/private-expired work, and invalidates old clean/pending assessments on restart. Private metadata remains memory-only.

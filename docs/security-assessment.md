@@ -1,3 +1,45 @@
+# Custom engine security maintenance — 19 October 2026
+
+The new manifest selects the entire Chromium 152.0.7977.169 source tree,
+`92a6f15143569cf59b340472d0b5030465d95722`, with CEF
+`8a0b5b99fd4aac7e353f847685be05577298970c`. It replaces the source baseline
+rather than guessing which individual fixes to backport. The upstream
+[15 October maintenance advisory](https://chromereleases.googleblog.com/2026/10/extended-stable-update-for-desktop_01598036246.html)
+identifies ten fixes in that maintenance release. The existing source/CVE and
+V8 mappings below explain the .167-to-.169 delta and platform applicability.
+The [CEF branch policy](https://github.com/chromiumembedded/cef/blob/master/docs/branches_and_building.md)
+lists branch 7977 as extended, including its Linux build requirements.
+
+The source build keeps the sandbox, TLS/web security, release CFI and ThinLTO.
+It uses pinned compiler/sysroot dependencies and records the adapted official
+workflow, source diffs, patch hashes, configuration, SDK archive and libcef.so
+digests. Its custom extension ABI does not alter generated public CEF classes.
+Development codec configuration and redistribution approval remain separate.
+
+The source selection is implemented and the resulting .169 custom SDK is built.
+Its source/header/binary digests match, and all 27 local application/runtime
+groups pass, including sandbox, TLS, permissions and isolation regressions.
+This establishes the fixed source integration and local regression result;
+formal release qualification remains incomplete. The build manifest's
+`security_qualified` remains false and development packaging requires opt-in.
+The standard .167 fallback still has the previously documented security gap
+and is not relabelled as fixed. The current official publisher audit is retained
+at `build-engine-reference/engine-audit-current.json`.
+
+AX actions validate active frame, browser/tree/document ownership and extant
+nodes, reject malformed identifiers without Chromium's CHECKing string parser,
+and bound tree/value inputs. Protected nodes permit focus only. History restore
+requires the same exact engine version and persistent profile, rejects POST
+bodies throughout the frame tree, file references and unsafe URLs, and never
+replays a history URL list. Private views never persist the new state. PiP
+selection tokens are invalidated on navigation, crash and close.
+
+Production readiness is not claimed. Runtime qualification, codec redistribution
+approval and unavailable target desktop/account checks remain distinct gates.
+The material below records earlier SDK assessments.
+
+## Earlier standard-SDK records
+
 # Engine security assessment
 
 Source: main `82684a8c265def0cd06d34d75272cb8e5076ce99`, verified against origin/main before modification. The selected SDK remains CEF 152.0.14 / Chromium 152.0.7977.167. `scripts/audit-cef.py --cef-root .cef --online` records actual header/archive provenance and the official Linux publisher index without installing anything. The captured record is `build/production-engine-audit.json`.

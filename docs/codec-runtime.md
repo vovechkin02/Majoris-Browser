@@ -1,3 +1,38 @@
+# Custom native codec runtime — 19 October 2026
+
+The custom source pipeline now builds CEF branch 7977 on the complete Chromium
+152.0.7977.169 revision. `engine/config/development-codecs.gn` enables
+`proprietary_codecs=true` and `ffmpeg_branding="Chrome"`, matching the inspected
+Brave native-media configuration. This is an explicit development build,
+separate from approval to redistribute a codec-enabled runtime. No external
+player/decoder process or user-agent workaround is added to Majoris.
+
+Build and prepare the SDK using [the engine guide](../engine/README.md). Supply
+it through the existing `cef_root`/`CEF_ROOT` path. The SDK carries source/patch,
+configuration and binary digests. Debian packaging rejects an unapproved codec
+runtime unless `MAJORIS_DEVELOPMENT_ENGINE=1` explicitly selects development
+packaging. That setting does not establish distribution rights.
+
+`engine/tests/generate-media-fixtures.py` creates original synthetic H.264 MP4,
+AAC M4A and combined H.264/AAC MP4, with CC0 fixture provenance and SHA-256.
+FFmpeg is used only to generate those tests; it is not an application playback
+backend. Set `MAJORIS_MEDIA_FIXTURES` to their directory when running the
+existing real-decoding media suite against the custom SDK. The assertions
+require advancing decoded video frames and nonzero audio samples, in browser
+and installed-app contexts. Compilation, MIME support and flags are not passes.
+Set `MAJORIS_EXPECT_PROPRIETARY_CODECS=1` to require the configured decoders.
+
+The final custom engine passed real H.264, AAC and combined MP4 playback in both
+contexts, alongside VP8/VP9/Opus, in the full 27/27 runtime regression run.
+Archive/libcef hashes and logs are in [verification results](verification-results.md).
+Physical audio output, hardware decoding and codec redistribution remain
+unverified/unapproved. The standard SDK still reports H.264/AAC unavailable.
+Widevine remains a separate vendor/runtime
+and service dependency; it is neither provided nor claimed by this work.
+Earlier SDK-specific qualification records below remain historical.
+
+## Earlier standard-SDK records
+
 # Qualified media runtime integration
 
 Current pass, main 82684a8: the pinned SDK and codec licensing situation are unchanged. The existing qualification route is retained; no authorised H.264/AAC runtime or vendor CDM was supplied. VP8/VP9/Opus Browser/app decoding remains mandatory. The platform fixture now explicitly asserts real HTML video fullscreen entry and exit. Native Wayland/fullscreen geometry, hardware decoding, physical audio and real DRM services remain separate unverified gates. A custom security-fixed runtime must first be built and qualified through the existing cef_root/clean/package flow; codec GN flags still require independent redistribution approval.

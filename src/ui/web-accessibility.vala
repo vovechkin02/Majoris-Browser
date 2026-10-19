@@ -2,7 +2,7 @@ namespace MajorisBrowser {
     [CCode(cname="gtk_accessible_update_platform_state",cheader_filename="gtk/gtk.h")]
     private extern void accessible_platform_changed(Gtk.Accessible accessible,Gtk.AccessiblePlatformState state);
     // These objects represent CEF AX nodes, never a guessed DOM or a page summary.
-    internal class WebAccessibleNode : Object, Gtk.Accessible {
+    internal class WebAccessibleNode : Gtk.Widget, Gtk.Accessible {
         public Gtk.AccessibleRole accessible_role { get; set; }
         private Gtk.ATContext? context;
         public weak WebAccessibleHost? owner;
@@ -11,8 +11,21 @@ namespace MajorisBrowser {
         public Gee.ArrayList<WebAccessibleNode> children=new Gee.ArrayList<WebAccessibleNode>();
         public int node_id;
         public string tree="";
+        public string document="";
         public Json.Object data;
-        public WebAccessibleNode(WebAccessibleHost host,int id,Gtk.AccessibleRole role,Json.Object value){Object(accessible_role:role);owner=host;node_id=id;data=value;}
+        private SimpleAction default_action=new SimpleAction("activate",null);
+        private SimpleAction focus_action=new SimpleAction("focus",null);
+        private SimpleAction select_action=new SimpleAction("select-all",null);
+        public WebAccessibleNode(WebAccessibleHost host,int id,Gtk.AccessibleRole role,Json.Object value){
+            Object(accessible_role:role);owner=host;node_id=id;data=value;can_target=false;
+            // GTK exposes public widget actions through org.a11y.atspi.Action.
+            // This node remains an AX model object, with no synthetic button,
+            // DOM selector, hit-test or independent text-entry state.
+            var group=new SimpleActionGroup();group.add_action(default_action);group.add_action(focus_action);group.add_action(select_action);insert_action_group("chromium",group);
+            default_action.set_enabled(false);focus_action.set_enabled(false);select_action.set_enabled(false);
+            default_action.activate.connect(()=>perform_action(0));focus_action.activate.connect(()=>grab_focus());
+            select_action.activate.connect(()=>{if(owner==null)return;string selected_text=attribute("nonAtomicTextFieldRoot")=="true"?owner.editable_text(this):attribute("value");int units=0;for(int i=0;i<selected_text.char_count();i++)units+=selected_text.get_char(selected_text.index_of_nth_char(i))>0xffff?2:1;grab_focus();perform_action(3,"",0,units);});
+        }
         public Gtk.ATContext? get_at_context(){if(context==null && owner!=null)context=Gtk.ATContext.create(accessible_role,this,owner.get_display());return context;}
         public Gtk.Accessible? get_accessible_parent(){return parent_node;}
         public Gtk.Accessible? get_first_accessible_child(){return children.size>0?children[0]:null;}
@@ -32,8 +45,20 @@ namespace MajorisBrowser {
             x=(int)left;y=(int)top;if(x>left)x--;if(y>top)y--;int end_x=(int)right,end_y=(int)bottom;if(end_x<right)end_x++;if(end_y<bottom)end_y++;width=int.max(0,end_x-x);height=int.max(0,end_y-y);return true;
         }
         public bool state_has(string name){if(!data.has_member("state"))return false;foreach(var value in data.get_array_member("state").get_elements())if(value.get_string()==name)return true;return false;}
+        // Used by the platform action adapter; never emulate AX with DOM script
+        // or coordinates. A missing custom runtime leaves this unavailable.
+        public bool perform_action(int operation,string value="",int anchor=0,int focus=0){
+            if(owner==null || owner.surface==null || owner.surface.closed || !owner.get_mapped() || document=="" || (operation!=1 && owner.protected_text(this)))return false;
+            owner.surface.engine.accessibility_action(tree,document,node_id,operation,value,anchor,focus);return true;
+        }
+        public override bool grab_focus(){if(owner==null || owner.surface==null || document=="")return false;owner.surface.grab_focus();return perform_action(1);}
+        public void invalidate(){document="";default_action.set_enabled(false);focus_action.set_enabled(false);select_action.set_enabled(false);set_accessible_parent(null,null);parent_node=null;sibling=null;children.clear();owner=null;}
         public string attribute(string name){if(!data.has_member("attributes"))return "";var a=data.get_object_member("attributes");if(!a.has_member(name))return "";var v=a.get_member(name);return v.get_value_type()==typeof(string)?v.get_string():Json.to_string(v,false);}
         public void refresh(){
+            bool supported=document!="" && owner!=null && !owner.protected_text(this);
+            default_action.set_enabled(supported && attribute("defaultActionVerb")!="" && attribute("defaultActionVerb")!="none");
+            focusable=state_has("focusable");focus_action.set_enabled(document!="" && owner!=null && focusable);
+            select_action.set_enabled(supported && state_has("editable"));
             update_property(Gtk.AccessibleProperty.LABEL,attribute("name"),Gtk.AccessibleProperty.DESCRIPTION,attribute("description"),Gtk.AccessibleProperty.READ_ONLY,attribute("restriction")=="readOnly",Gtk.AccessibleProperty.MULTI_LINE,state_has("multiline"),Gtk.AccessibleProperty.REQUIRED,state_has("required"));
             update_state(Gtk.AccessibleState.DISABLED,attribute("restriction")=="disabled",Gtk.AccessibleState.BUSY,state_has("busy"),Gtk.AccessibleState.HIDDEN,state_has("invisible"));
             string check=attribute("checkedState");if(check!="")update_state(Gtk.AccessibleState.CHECKED,check=="mixed"?Gtk.AccessibleTristate.MIXED:check=="true"?Gtk.AccessibleTristate.TRUE:Gtk.AccessibleTristate.FALSE);
@@ -46,9 +71,10 @@ namespace MajorisBrowser {
     }
     internal class WebAccessibleTextNode : WebAccessibleNode, Gtk.AccessibleText {
         private string text="";
+        protected unowned string ax_text(){return text;}
         public WebAccessibleTextNode(WebAccessibleHost host,int id,Gtk.AccessibleRole role,Json.Object data){base(host,id,role,data);}
         private uint char_offset(int units){uint result=0;int consumed=0;for(int i=0;i<text.char_count() && consumed<units;i++){unichar c=text.get_char(text.index_of_nth_char(i));consumed+=c>0xffff?2:1;result++;}return result;}
-        public void refresh_text(){
+        public virtual void refresh_text(){
             string next="";if(owner!=null && !owner.protected_text(this)){if(data.get_string_member("role")=="textField" || data.get_string_member("role")=="searchBox"){next=attribute("value");if(attribute("nonAtomicTextFieldRoot")=="true")next=owner.editable_text(this);}else next=attribute("name");}
             if(next!=text){uint old=(uint)text.char_count();if(old>0)update_contents(Gtk.AccessibleTextContentChange.REMOVE,0,old);text=next;if(text!="")update_contents(Gtk.AccessibleTextContentChange.INSERT,0,(uint)text.char_count());if(old>0 && attribute("containerLiveStatus")!="" && text!="")announce(text,attribute("containerLiveStatus")=="assertive"?Gtk.AccessibleAnnouncementPriority.HIGH:Gtk.AccessibleAnnouncementPriority.MEDIUM);}
             update_caret_position();update_selection_bound();
@@ -68,6 +94,47 @@ namespace MajorisBrowser {
             }return get_contents(start,end);
         }
         public bool get_selection([CCode(array_length_pos=0.5,array_length_type="gsize")] out Gtk.AccessibleTextRange[] ranges){ranges={};uint a=char_offset(int.parse(attribute("textSelStart"))),b=char_offset(int.parse(attribute("textSelEnd")));if(a==b)return false;Gtk.AccessibleTextRange range={uint.min(a,b),a>b?a-b:b-a};ranges={range};return true;}
+    }
+    // GtkEditable exposes AT-SPI EditableText without a synthetic Gtk.Entry or
+    // text buffer. Reads always come from Chromium AX; writes are bounded AX
+    // SetValue requests, coalesced for GTK's delete+insert set_text transaction.
+    internal class WebAccessibleEditableNode : WebAccessibleTextNode, NativeEditable {
+        private string? pending;
+        private string pending_document="";
+        private uint write_idle;
+        public WebAccessibleEditableNode(WebAccessibleHost host,int id,Gtk.AccessibleRole role,Json.Object data){base(host,id,role,data);}
+        public unowned NativeEditable? get_delegate(){return null;}
+        unowned string NativeEditable.get_text(){return ax_text();}
+        [NoAccessorMethod]
+        public string text { get{return ax_text();} set{queue_value(value);} }
+        public bool editable {get{return document!="" && owner!=null && !owner.protected_text(this) && state_has("editable") && (attribute("restriction")=="" || attribute("restriction")=="none" || attribute("restriction")=="0");}set{}}
+        public bool enable_undo {get;set;default=false;}
+        public int width_chars {get;set;default=-1;}
+        public int max_width_chars {get;set;default=-1;}
+        public float xalign {get;set;default=0;}
+        [NoAccessorMethod]
+        public int cursor_position {get{return (int)get_caret_position();}}
+        [NoAccessorMethod]
+        public int selection_bound {get{int a,b;get_selection_bounds(out a,out b);return a;}}
+        private int chars_from_units(int units){int consumed=0,result=0;string value=ax_text();for(int i=0;i<value.char_count() && consumed<units;i++){unichar c=value.get_char(value.index_of_nth_char(i));consumed+=c>0xffff?2:1;result++;}return result;}
+        private int units_from_chars(int chars){string value=ax_text();int units=0;for(int i=0;i<int.min(int.max(0,chars),value.char_count());i++)units+=value.get_char(value.index_of_nth_char(i))>0xffff?2:1;return units;}
+        public bool get_selection_bounds(out int start_pos,out int end_pos){start_pos=chars_from_units(int.parse(attribute("textSelStart")));end_pos=chars_from_units(int.parse(attribute("textSelEnd")));return start_pos!=end_pos;}
+        public void select_region(int start_pos,int end_pos){if(!editable)return;int length=ax_text().char_count();perform_action(3,"",units_from_chars(start_pos<0?length:start_pos),units_from_chars(end_pos<0?length:end_pos));}
+        private void queue_value(string value){
+            if(!editable || value.length>65536 || !value.validate())return;pending=value;pending_document=document;
+            if(write_idle!=0)return;
+            write_idle=Idle.add(()=>{write_idle=0;string? requested=pending;pending=null;if(requested!=null && document==pending_document && editable)perform_action(2,requested);return Source.REMOVE;});
+        }
+        private string editing_value(){if(pending_document!=document)pending=null;return pending??ax_text();}
+        public void do_delete_text(int start_pos,int end_pos){
+            if(!editable)return;string value=editing_value();int length=value.char_count();int start=int.min(int.max(0,start_pos),length),end=end_pos<0?length:int.min(int.max(start,end_pos),length);
+            queue_value(value.substring(0,value.index_of_nth_char(start))+value.substring(value.index_of_nth_char(end)));
+        }
+        public void do_insert_text(string text,int length,ref int position){
+            if(!editable || text.length>65536)return;string insert=length<0?text:text.substring(0,int.min(length,text.length));if(!insert.validate())return;
+            string value=editing_value();if(value.length+insert.length>65536)return;position=int.min(int.max(0,position),value.char_count());int offset=value.index_of_nth_char(position);
+            queue_value(value.substring(0,offset)+insert+value.substring(offset));position+=insert.char_count();
+        }
     }
     internal class WebAccessibleHost : Gtk.Widget, Gtk.Accessible {
         public weak BrowserSurface? surface;
@@ -94,7 +161,7 @@ namespace MajorisBrowser {
                 int offset=(int)current.data.get_int_member("offset_container_id");if(offset<=0)return current==root_node;current=nodes[current.tree+":"+offset.to_string()];if(current==null)return false;x-=double.parse(current.attribute("scrollX"));y-=double.parse(current.attribute("scrollY"));
             }return false;
         }
-        public void clear(){foreach(var node in nodes.values){node.set_accessible_parent(null,null);node.children.clear();}nodes.clear();root_node=null;tree_id="";roots.clear();focuses.clear();focus_tree="";}
+        public void clear(){foreach(var node in nodes.values)node.invalidate();nodes.clear();root_node=null;tree_id="";roots.clear();focuses.clear();focus_tree="";}
         private static Gtk.AccessibleRole role(string value){switch(value){
             case "rootWebArea":return Gtk.AccessibleRole.DOCUMENT;case "heading":return Gtk.AccessibleRole.HEADING;
             case "textField":case "searchBox":return Gtk.AccessibleRole.TEXT_BOX;case "staticText":return Gtk.AccessibleRole.LABEL;
@@ -125,8 +192,8 @@ namespace MajorisBrowser {
                     if(update.has_member("root_id"))roots[id]=(int)update.get_int_member("root_id");
                     if(update.has_member("nodes"))foreach(var item in update.get_array_member("nodes").get_elements()){
                         var data=item.get_object();int key=(int)data.get_int_member("id");string r=data.get_string_member("role");var mapped=role(r);string identity=id+":"+key.to_string();var node=nodes[identity];
-                        if(node==null || node.accessible_role!=mapped){if(node!=null)node.set_accessible_parent(null,null);node=r=="textField" || r=="searchBox" || r=="staticText"?new WebAccessibleTextNode(this,key,mapped,data):new WebAccessibleNode(this,key,mapped,data);node.tree=id;nodes[identity]=node;}
-                        node.data=data;
+                        if(node==null || node.accessible_role!=mapped){if(node!=null)node.invalidate();node=r=="textField" || r=="searchBox"?new WebAccessibleEditableNode(this,key,mapped,data):r=="staticText"?new WebAccessibleTextNode(this,key,mapped,data):new WebAccessibleNode(this,key,mapped,data);node.tree=id;nodes[identity]=node;}
+                        node.data=data;node.document=obj.has_member("majoris_document")?obj.get_string_member("majoris_document"):"";
                     }
                 }
                 if(nodes.size>20000){clear();return;}
@@ -137,7 +204,7 @@ namespace MajorisBrowser {
                 // A subframe update may precede its parent's childTreeId. Bound orphan
                 // retention and prune detached nodes within each updated engine tree.
                 var local=new Gee.HashSet<string>();var local_root=nodes[id+":"+roots[id].to_string()];if(local_root!=null)mark_tree(local_root,local,0);
-                foreach(string key in nodes.keys.to_array())if(key.has_prefix(id+":") && !local.contains(key)){nodes[key].set_accessible_parent(null,null);nodes.unset(key);}
+                foreach(string key in nodes.keys.to_array())if(key.has_prefix(id+":") && !local.contains(key)){nodes[key].invalidate();nodes.unset(key);}
                 foreach(string key in visited)accessible_platform_changed(nodes[key],Gtk.AccessiblePlatformState.FOCUSED);
             }catch(Error e){warning("Invalid engine accessibility update: %s",e.message);}
         }

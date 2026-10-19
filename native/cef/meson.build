@@ -25,3 +25,8 @@ foreach f : ['libcef.so', 'chrome-sandbox', 'libvk_swiftshader.so', 'libvulkan.s
 endforeach
 install_data(cef_root / 'LICENSE.txt', install_dir: get_option('datadir') / 'licenses/majoris-browser', rename: 'CEF-LICENSE.txt')
 install_data(cef_root / 'CREDITS.html', install_dir: get_option('datadir') / 'licenses/majoris-browser')
+fs = import('fs')
+if fs.exists(cef_root / 'majoris-runtime.json')
+  install_data(cef_root / 'majoris-runtime.json', install_dir: cef_runtime_dir)
+  install_data('../../engine/LICENSE', install_dir: get_option('datadir') / 'licenses/majoris-browser', rename: 'Majoris-engine-LICENSE.txt')
+endif

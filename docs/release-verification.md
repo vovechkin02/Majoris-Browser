@@ -1,3 +1,39 @@
+# Custom engine release qualification — revision 0.1.0-7
+
+Use [the source build guide](../engine/README.md) and
+[patch maintenance guide](../engine/PATCH-MAINTENANCE.md). Qualify the prepared
+custom SDK separately from the standard fallback. The exact required package
+test set is now 27 groups, including `cef-history` and `cef-native-pip`.
+`scripts/verify-package.py` rejects a missing, skipped or failing required group.
+
+Required evidence includes a successful pinned engine build and SDK digest,
+actual H.264/AAC/MP4 decode logs, native PiP pixels/identity/lifecycle, real
+AX/AT-SPI actions and text editing, navigation selection/back/forward without URL
+replay, private/cross-profile refusal, and task metrics/kill regressions. Run the
+full Majoris suite, Debian package build and extracted-package smoke against
+that exact SDK. Preserve failed attempts as well as final results.
+
+This pass completed fresh standard 27/27, fresh custom 27/27 and Debian custom
+27/27, followed by archive and extracted-runtime verification. Native media,
+PiP, required AX/AT-SPI actions, history and real task metrics passed. Additional
+abrupt-crash history recovery passed against both runtimes. See
+[artifact hashes and exact logs](verification-results.md). The resulting
+0.1.0-7 package is a development artifact; the external gates below still apply.
+
+Custom SDK provenance is installed beside libcef.so. Packaging verifies that
+the library digest matches it. An unqualified runtime/security build or unapproved codec build requires explicit
+`MAJORIS_DEVELOPMENT_ENGINE=1` development packaging; this is not distribution
+approval. Do not mark source/runtime/security/redistribution qualification true
+merely because source patches apply or compilation completes.
+
+The target Majoris desktop and accounts are unavailable, as confirmed by the
+user. Native Wayland, actual dock grouping, Orca and real Google Sheets/provider
+checks therefore remain unverified. No system installation/upgrade or approved
+production codec distribution has been performed. Earlier package records below
+refer to their stated standard SDK revisions, not the custom engine.
+
+## Earlier standard-SDK records
+
 # Release gate
 
 The authoritative current gate is revision 0.1.0-6 with **25 required suites**, adding download-scanner while retaining all 24 earlier groups. Verify optional scanner configuration, socket permissions, official signature maintenance, size/time limits, pending/open restrictions, removal/private cancellation and harmless test signatures. Verify managed service entitlement, per-installation provisioning, operator abuse/privacy controls, live health/rotation and consent before enabling distribution defaults. No live deployment is supplied. See the authoritative matrix and current verification section; older package results remain historical.

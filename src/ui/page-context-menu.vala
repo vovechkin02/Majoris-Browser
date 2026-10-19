@@ -6,6 +6,7 @@ namespace MajorisBrowser {
         private SimpleActionGroup actions=new SimpleActionGroup();
         private int count;
         private BrowserSurface surface;
+        private string generation="";
         public static void show(Application app,BrowserSurface surface,string text,owned PageOpener opener){new PageContextMenu(app,surface,text,(owned)opener);}
         private void item(string label,owned MenuAction callback,bool enabled=true){string name="item"+(count++).to_string();var action=new SimpleAction(name,null);action.set_enabled(enabled);action.activate.connect(()=>callback());actions.add_action(action);menu.append(label,"page-context."+name);}
         private void command(string label,string command,bool enabled=true){item(label,()=>surface.engine.command(command),enabled);}
@@ -13,6 +14,7 @@ namespace MajorisBrowser {
             this.surface=surface;
             try{
                 var parser=new Json.Parser();parser.load_from_data(text);var data=parser.get_root().get_object();
+                generation=data.has_member("generation")?data.get_string_member("generation"):"";
                 string link=data.get_string_member("link"),source=data.get_string_member("source"),selection=data.get_string_member("selection");bool editable=data.get_boolean_member("editable");int edit=(int)data.get_int_member("editFlags"),media=(int)data.get_int_member("media"),flags=(int)data.get_int_member("mediaFlags");
                 bool background=!editable && selection=="" && link=="" && media==0;
                 if(background){command(_("Back"),"back",surface.can_go_back);command(_("Forward"),"forward",surface.can_go_forward);command(_("Reload"),"reload");command(_("Save Page As…"),"save-page");command(_("Print…"),"print");command(_("View Source"),"view-source");}
@@ -31,8 +33,9 @@ namespace MajorisBrowser {
                 }else if(selection!="")command(_("Copy"),"copy");
                 if(selection!="" && selection.length<=8192){string target=app.preferences.get_string("search-template").replace("%s",Uri.escape_string(selection,null,false));item(_("Search Selected Text"),()=>opener(target,false));}
                 if((media==2 || media==3) && (flags&1)==0){
-                    command((flags&2)!=0?_("Play"):_("Pause"),(flags&2)!=0?"context-media:play":"context-media:pause");
-                    if((flags&32)!=0)command((flags&4)!=0?_("Unmute Media"):_("Mute Media"),(flags&4)!=0?"context-media:unmute":"context-media:mute");
+                    if(media==2 && MajorisCef.has_native_pip())command(_("Picture in Picture"),"context-media:"+generation+":pip");
+                    command((flags&2)!=0?_("Play"):_("Pause"),"context-media:"+generation+((flags&2)!=0?":play":":pause"));
+                    if((flags&32)!=0)command((flags&4)!=0?_("Unmute Media"):_("Mute Media"),"context-media:"+generation+((flags&4)!=0?":unmute":":mute"));
                     if(source!=""){item(_("Open Media"),()=>opener(source,false));if((flags&16)!=0)command(_("Save Media…"),"download:"+source);item(_("Copy Media URL"),()=>surface.get_clipboard().set_text(source));}
 
                 }

@@ -6,6 +6,10 @@ namespace MajorisCef {
     public void shutdown ();
     [CCode (cname = "mc_runtime_version")]
     public unowned string version ();
+    [CCode (cname = "mc_runtime_has_native_pip")]
+    public bool has_native_pip ();
+    [CCode (cname = "mc_runtime_capabilities")]
+    public uint64 capabilities ();
     [CCode (cname = "mc_profile_clear")]
     public bool clear_profile (string path) throws GLib.Error;
     [CCode (cname = "mc_profile_acquire")]
@@ -22,12 +26,15 @@ namespace MajorisCef {
         public View.with_permissions(string profile,bool ephemeral,string url,string scope,string permissions);
         [CCode(cname="mc_view_new_with_security")]
         public View.with_security(string profile,bool ephemeral,string url,string scope,string permissions,bool threat_checks);
+        [CCode(cname="mc_view_new_with_session")]
+        public View.with_session(string profile,bool ephemeral,string url,string scope,string permissions,bool threat_checks,string history);
         public void set_permissions(string permissions);
         public void close ();
         public void request_close ();
         public void drag_end(int x,int y,int operation);
         public void drag_target(int phase,string text,string files,int x,int y);
         public void set_accessibility(bool enabled);
+        public void accessibility_action(string tree,string document,int node,int action,string value,int anchor,int focus);
         public void set_threat_checks(bool enabled);
         public void load (string url);
         public void command (string command);

@@ -43,7 +43,7 @@ namespace MajorisBrowser {
             var menu = new Menu ();
             string[,] entries = {{"New Tab","new-tab"},{"New Window","new-window"},{"Private Window","private"},{"Duplicate Tab","duplicate"},{"Pin / Unpin Tab","pin"},{"Reopen Closed Tab","reopen"},{"Bookmarks","bookmarks"},{"History","history"},{"Downloads","downloads"},{"Find in Page","find"},{"Install as App…","install-app"},{"Settings","settings"},{"Task Manager","tasks"},{"Developer Tools","devtools"},{"About Browser","about"}};
             for (int i=0;i<entries.length[0];i++) menu.append (_(entries[i,0]),"win."+entries[i,1]);
-            menu.append(_("Save Page…"),"win.save-page");menu.append(_("Save as PDF…"),"win.save-pdf");menu.append(_("Fill Address…"),"win.fill-address");menu.append(_("Quit Browser"),"win.quit");
+            menu.append(_("Save Page…"),"win.save-page");menu.append(_("Save as PDF…"),"win.save-pdf");if(MajorisCef.has_native_pip())menu.append(_("Picture in Picture"),"win.picture-in-picture");menu.append(_("Fill Address…"),"win.fill-address");menu.append(_("Quit Browser"),"win.quit");
             var menu_button = new Gtk.MenuButton (); menu_button.icon_name="open-menu-symbolic"; menu_button.menu_model=menu; header.pack_end (menu_button); layout.add_top_bar (header);
             var bar = new Adw.TabBar (); bar.view=tabs; layout.add_top_bar (bar);
             var tab_menu=new Menu();foreach(string name in new string[]{"duplicate","pin","move-window","close-others","close-right","close-tab"})tab_menu.append(name,"win."+name);tabs.menu_model=tab_menu;
@@ -172,7 +172,7 @@ namespace MajorisBrowser {
             action("print",{"<Control>p"},() => command("print"));
             action("save-page",{"<Control>s"},()=>command("save-page"));
             action("save-pdf",{},()=>command("save-pdf"));
-            action("picture-in-picture",{},()=>command("picture-in-picture"));((SimpleAction)lookup_action("picture-in-picture")).set_enabled(false);
+            action("picture-in-picture",{},()=>command("picture-in-picture"));((SimpleAction)lookup_action("picture-in-picture")).set_enabled(MajorisCef.has_native_pip());
             action("fill-address",{},()=>{if(selected!=null)new AddressDialog(app,selected).present(this);});
             action("about",{},() => {
                 var about=new Adw.AboutDialog();about.application_name="Majoris Browser";about.application_icon="com.majoris.browser";about.version=Config.VERSION;about.developer_name="Majoris";about.comments="CEF "+MajorisCef.version();about.license_type=Gtk.License.GPL_3_0;about.present(this);
@@ -180,8 +180,8 @@ namespace MajorisBrowser {
         }
         private void command (string name) { if(selected!=null)selected.engine.command(name); }
         private async void paste_address(bool search){try{string? value=yield get_clipboard().read_text_async(null);if(value!=null && selected!=null)selected.navigate(search?app.preferences.get_string("search-template").replace("%s",Uri.escape_string(value,null,false)):UrlResolver.resolve(value,app.preferences.get_string("search-template")));}catch(Error e){}}
-        public void add_tab (string url,bool background=false) {
-            add_surface(new OffscreenBrowserSurface(is_private?window_id:app.paths.browser_context,is_private,url,"",is_private?"[]":app.permissions.serialized(),app.threats.configured),background);
+        public void add_tab (string url,bool background=false,string history="") {
+            add_surface(new OffscreenBrowserSurface(is_private?window_id:app.paths.browser_context,is_private,url,"",is_private?"[]":app.permissions.serialized(),app.threats.configured,is_private?"":history),background);
         }
         private void add_surface(BrowserSurface surface,bool background=false){
             app.downloads.attach(surface.engine,is_private?window_id:"");
@@ -204,6 +204,7 @@ namespace MajorisBrowser {
                 if(kind=="image:favicon" && value!="")page.icon=new BytesIcon(new Bytes(Base64.decode(value)));
                 if(kind=="audio" || kind=="muted" || kind=="navigation-started" || kind=="crashed"){page.indicator_activatable=surface.audio_state.available;string? icon=surface.audio_state.icon;page.indicator_icon=icon==null?null:new ThemedIcon(icon);}
                 if(kind=="url"){if(selected==surface)omnibox.set_address(value);schedule_session();}
+                if(kind=="history")schedule_session();
                 if(kind=="loading") {page.loading=value=="1";if(selected==surface)sync_navigation();if(value=="0" && !is_private){string visit_url=surface.url;string visit_title=surface.page_title;app.storage.run((store) => store.visit(visit_url,visit_title));}}
                 if(kind=="back" && selected==surface)back.sensitive=value=="1";
                 if(kind=="security" && selected==surface){site_button.icon_name=value.has_prefix("Encrypted TLS connection")?"channel-secure-symbolic":"security-medium-symbolic";site_button.tooltip_text=value;}
@@ -340,7 +341,7 @@ namespace MajorisBrowser {
             search.search_changed.connect(()=>refresh());refresh();dialog.present(this);
         }
         private void schedule_session () { if(!is_private && !window_closing)app.sessions.changed(); }
-        public Json.Node export_state () {
+        public Json.Node export_state (ref int history_budget) {
             var b=new Json.Builder();b.begin_object();
             b.set_member_name("id");b.add_string_value(window_id);
             b.set_member_name("width");b.add_int_value(get_width()>0?get_width():default_width);b.set_member_name("height");b.add_int_value(get_height()>0?get_height():default_height);
@@ -348,7 +349,7 @@ namespace MajorisBrowser {
             b.set_member_name("maximized");b.add_boolean_value(maximized);
             b.set_member_name("tabs");b.begin_array();
             for(int i=0;i<tabs.n_pages;i++){var page=tabs.get_nth_page(i);var surface=page.child as BrowserSurface;
-                b.begin_object();b.set_member_name("url");b.add_string_value(surface.url);b.set_member_name("pinned");b.add_boolean_value(page.pinned);b.set_member_name("active");b.add_boolean_value(page==tabs.selected_page);b.end_object();}
+                b.begin_object();b.set_member_name("url");b.add_string_value(surface.url);if(!is_private && surface.navigation_state!="" && surface.navigation_state_url==surface.url && surface.navigation_state.length<=history_budget){history_budget-=surface.navigation_state.length;b.set_member_name("history-v1");b.add_string_value(surface.navigation_state);}b.set_member_name("pinned");b.add_boolean_value(page.pinned);b.set_member_name("active");b.add_boolean_value(page==tabs.selected_page);b.end_object();}
             b.end_array();b.end_object();return b.get_root();
         }
         public void import_state(Json.Object state){
@@ -358,7 +359,7 @@ namespace MajorisBrowser {
             if(state.has_member("maximized") && state.get_boolean_member("maximized"))maximize();
             Adw.TabPage? active=null;
             foreach(var node in state.get_array_member("tabs").get_elements()){
-                var item=node.get_object();add_tab(UrlResolver.resolve(item.get_string_member("url")));tabs.set_page_pinned(tabs.selected_page,item.get_boolean_member("pinned"));if(item.get_boolean_member("active"))active=tabs.selected_page;
+                var item=node.get_object();add_tab(UrlResolver.resolve(item.get_string_member("url")),false,item.has_member("history-v1")?item.get_string_member("history-v1"):"");tabs.set_page_pinned(tabs.selected_page,item.get_boolean_member("pinned"));if(item.get_boolean_member("active"))active=tabs.selected_page;
             }
             if(active!=null)tabs.selected_page=active;if(tabs.n_pages==0)add_tab("about:blank");
         }

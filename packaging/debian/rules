@@ -3,6 +3,7 @@
 	dh $@ --buildsystem=meson
 override_dh_auto_configure:
 	test -n "$(CEF_ROOT)"
+	python3 engine/scripts/verify-sdk.py --sdk "$(CEF_ROOT)" --for-package
 	dh_auto_configure -- -Dcef_root=$(CEF_ROOT)
 override_dh_fixperms:
 	dh_fixperms

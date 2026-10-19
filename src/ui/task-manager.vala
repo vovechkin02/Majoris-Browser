@@ -16,7 +16,7 @@ namespace MajorisBrowser {
                 if(kind!="tasks")return;
                 while(list.get_first_child()!=null)list.remove(list.get_first_child());
                 int order=0;foreach(var line in value.split("\n")){
-                    var f=line.split("\t");if(f.length!=9)continue;
+                    var f=line.split("\t");if(f.length!=9 && f.length!=12)continue;
                     var row=new Adw.ActionRow();row.use_markup=false;row.title=f[5].compress();
                     row.set_data<string>("order",(order++).to_string());row.set_data<string>("title",row.title);row.set_data<string>("cpu",f[2]);row.set_data<string>("memory",f[3]);
                     string[] types={"Unknown","Browser","GPU","Zygote","Utility","Renderer","Extension","Guest","Legacy Plugin","Plugin","Sandbox","Worker","Shared Worker","Service Worker"};
@@ -24,6 +24,10 @@ namespace MajorisBrowser {
                     int type=int.parse(f[1]);string name=type>=0 && type<types.length?types[type]:"Other";
                     row.subtitle="%s · CPU %.1f%% · %s".printf(name,double.parse(f[2]),int64.parse(f[3])<=0?_("Memory unavailable"):GLib.format_size(uint64.parse(f[3])));
                     row.subtitle+=" · "+_("Task %s").printf(f[0])+" · "+(int64.parse(f[6])<=0?_("GPU memory unavailable"):_("GPU %s").printf(GLib.format_size(uint64.parse(f[6]))))+(f[7]=="1"?_(" (aggregate)"):"");
+                    if(f.length==12){
+                        row.subtitle+=" · "+_("PID %s").printf(f[9])+" · "+_("Network %s/s").printf(GLib.format_size(uint64.parse(f[10])))+" · "+_("Root task %s").printf(f[11]);
+                        unavailable.label=_("CPU and memory are process-wide and may be shared by tasks. Network is measured per task. Root task IDs come from Chromium; they are not a complete operating-system process hierarchy.");
+                    }
                     if(f[4]=="1"){
                         string task_id=f[0];var end=new Gtk.Button.with_label(_("End Process"));end.valign=Gtk.Align.CENTER;end.add_css_class("destructive-action");row.add_suffix(end);
                         end.clicked.connect(()=>engine.command("kill-task:"+task_id));

@@ -1,0 +1,12 @@
+--- a/libcef/browser/task_manager_impl.cc
++++ b/libcef/browser/task_manager_impl.cc
+@@ -58,7 +58,8 @@
+ int64_t GetRefreshTypes() {
+   return task_manager::REFRESH_TYPE_CPU |
+          task_manager::REFRESH_TYPE_GPU_MEMORY |
+-         task_manager::REFRESH_TYPE_MEMORY_FOOTPRINT;
++         task_manager::REFRESH_TYPE_MEMORY_FOOTPRINT |
++         task_manager::REFRESH_TYPE_NETWORK_USAGE;
+ }
+ 
+ }  // namespace

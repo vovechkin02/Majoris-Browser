@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Inspect an amd64 Debian archive and smoke-test its extracted runtime."""
 import argparse
+import hashlib
+import json
 import os
 import pathlib
 import subprocess
@@ -50,6 +52,14 @@ with tempfile.TemporaryDirectory(prefix='majoris-deb-runtime-', dir='/tmp') as t
     helper = stage / 'usr/libexec/majoris-browser-cef-subprocess'
     library = stage / 'usr/lib/x86_64-linux-gnu/majoris-browser'
     runtime = library / 'cef'
+    provenance = runtime / 'majoris-runtime.json'
+    if provenance.exists():
+        metadata = json.loads(provenance.read_text())
+        if metadata.get('schema') != 1 or hashlib.file_digest(
+                (runtime / 'libcef.so').open('rb'), 'sha256').hexdigest() != metadata.get('libcef_sha256'):
+            raise SystemExit('Installed custom engine provenance does not match libcef.so')
+        if not (stage / 'usr/share/licenses/majoris-browser/Majoris-engine-LICENSE.txt').is_file():
+            raise SystemExit('Installed custom engine licence is missing')
     for executable in (binary, helper, library / 'libmajoris-cef.so'):
         dynamic = subprocess.check_output(['readelf', '-d', str(executable)], text=True)
         for line in dynamic.splitlines():

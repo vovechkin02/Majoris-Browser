@@ -1,5 +1,126 @@
 # Verification results — 19 October 2026
 
+## Custom engine pass — revision 0.1.0-7, local verification complete
+
+Changes are based on main 98e6eb01872af16d5385e90e72c633362b32550e. CEF
+7977 commit 8a0b5b99fd4aac7e353f847685be05577298970c and Chromium
+152.0.7977.169 commit 92a6f15143569cf59b340472d0b5030465d95722 are
+acquired in a dedicated native Linux workspace. Every pinned Git dependency is
+verified after gclient sync. All 115 CEF upstream patches applied without a
+failed hunk. Majoris patch applicability/reversal and corruption rejection pass.
+Both extension source files pass the actual generated release compiler/flags
+syntax check and compile to release objects. The supported minimal `libcef`
+target linked successfully with CFI/ThinLTO. The first build stopped in CEF's
+unrelated GTK3 sample client because its GTK headers were unavailable; using
+the supported minimal-only runtime target reused compiled objects and avoided
+that sample dependency. SDK and runtime qualification are recorded separately
+below, alongside production release gates.
+
+The prepared custom SDK is Chromium 152.0.7977.169. Its minimal archive SHA-256
+is `87061e4b0b2167a601d3e5940756df04fb1603e0dbff6a59d7a16e8e1ec8a590`;
+libcef.so SHA-256 is
+`2fcd59cc438bbbfc7620f4a7bb6ff52d6752b454e0a0889ca549f75d6e0942fe`.
+All seven Majoris extension symbols are exported. SDK provenance, actual source
+diff digests and extension-file hashes are recorded in `majoris-runtime.json`;
+`build-engine-reference/custom-sdk-final-audit.json` confirms the runtime header
+version and library match. Build provenance alone does not certify runtime
+behavior. Unqualified open-codec SDKs also require explicit development-package
+opt-in; the opt-in does not mutate qualification or approval fields.
+
+The first acquisition filled WSL's 16 GiB `/tmp` tmpfs, causing 11 later
+application fixtures to fail. The source was moved to disk-backed Linux storage,
+temporary space recovered, and the unchanged full standard suite passed 25/25.
+The driver now rejects RAM-backed workspaces. Interrupted empty dependency
+repositories were subsequently repaired with forced sync and exact revision
+checks. Pinned depot_tools bootstrap and Chromium's pinned sysroot resolve the
+initial Python/CUPS project-generation failures. Failed logs are retained.
+
+Fresh standard-SDK build `build-clean-custom-engine-final` passed 25/25 before
+the two new groups were added. Targeted history, AX/AT-SPI, native PiP fallback
+and context-menu tests pass after the integrations. The AX fixture now waits
+for its actual button tree before testing actions, avoiding an observed early
+document-only snapshot race; its original deadlines remain. The new required
+set is 27 groups. The full final standard/custom and package results below
+come from actual execution, separately from these earlier targeted checks.
+
+The first 27-group run passed 25 groups, with exit and permissions timing out.
+Diagnostics reproduced a shutdown race: CEF could queue the last closed event
+before decrementing the live-view count, leaving GTK blocked in shutdown with
+no wakeup. The bridge now publishes the count first and wakes the GLib context.
+Five repetitions each of exit and permissions then passed (10/10), with the
+original deadlines and assertions. Logs: `stock-27.log`,
+`stock-focused-rebuilt.log`, `exit-permissions-repeat.log`, and
+`shutdown-fix-repeat.log`. The subsequent fresh build
+`build-clean-engine-stock-final` passed all 27 groups, zero failures/skips,
+including the corrected shutdown and strengthened media assertions. Its log is
+`build-engine-reference/stock-final.log`.
+
+Original synthetic H.264, AAC and combined MP4 fixtures were generated with a
+disposable extracted Debian FFmpeg toolchain; no host package was installed.
+Their CC0 provenance/digests are `build-engine-reference/media/provenance.json`.
+The app never invokes FFmpeg for playback. Actual custom-runtime decoding is
+verified by `custom-27.log`: H.264, AAC and combined MP4 playback all return
+true in browser and installed-app contexts, alongside VP8/VP9/Opus. These
+assertions require decoded frames and nonzero audio samples, with missing
+proprietary decoders also failing the test.
+
+That first custom run passed 25/27. History correctly exposed an integration
+bug: Chromium's unused controller contains one initial placeholder, not zero
+entries. The source guard now requires exactly that untouched initial entry
+and no pending navigation. Native PiP's first trusted click raced layout in
+the faster custom runtime; the fixture now waits for two actual animation
+frames and explicitly focuses the surface. `pip-custom-focused.log` then
+passes all three browser/app/private contexts, with advancing native pixels,
+resize/close, WM_CLASS identity, navigation/crash/source cleanup and selected
+second-video/stale-context checks. `ax-custom-required.log` passes required
+custom activation, Unicode AT-SPI editing, native selection and protected write
+refusal. These tests require actual custom AX metadata when capability is
+advertised, preventing a silent fallback pass.
+
+The final fresh custom build, `build-clean-engine-custom-final`, passed all
+27 groups with zero failures/skips (`build-engine-reference/custom-final.log`).
+It uses the corrected SDK/archive hashes above. Media, native PiP and required
+AX/AT-SPI actions passed again on that exact binary. History additionally
+verifies selected-entry restoration, back/forward, no URL replay, private
+exclusion, profile/version mismatch and malformed serialized-entry fallback.
+
+An additional abrupt-crash fixture persists a native checkpoint, SIGKILLs only
+its disposable process group (including CEF children), and restores from the
+same persistent profile without clean shutdown. Both custom and standard URL
+fallback runs pass (`history-crash-runtime.log`, `history-crash-stock.log`).
+The stricter task check requires custom renderer PID/network/root fields and
+confirms the PID exists under `/proc`; its idle sample was PID 398, 0 bytes/s,
+root task 6 (`task-metrics-runtime.log`), followed by the real task-kill test.
+
+The custom Debian development package build passed all 27 required groups,
+zero failures/skips (`custom-package.log`). The archive is
+`build-packages-custom-engine-7/majoris-browser_0.1.0-7_amd64.deb`, 264002800
+bytes, SHA-256
+`f05869aa0381090c0a921b0a1ea07243ca996671a43b77a02dc1a3fed916a587`.
+`custom-deb-verify.log` passes archive ownership, sandbox mode, resources,
+installed search paths, custom libcef digest and Majoris engine license checks,
+and actual extracted GTK/CEF browser/installed-app smoke. No system install was
+performed. The additional crash fixture changed tests only after that package
+source snapshot; application/engine sources and the verified binary are the
+same. Runtime results are separate from immutable build-time approval fields;
+development opt-in does not approve production distribution.
+
+Current logs are under `build-engine-reference/`: `acquire-verified.log`,
+`apply-final.log`, `extension-syntax.log`, `engine-build-final.log`,
+`patch-tests.log`, `app-final.log`, `ax-fixture-test.log`, `editable-tests.log`
+and `pip-tests.log`. The active upstream compilation log is in the dedicated
+engine workspace. Final logs include `engine-history-build.log`,
+`sdk-history-prepare.log`, `custom-final.log`, `custom-package.log`,
+`custom-deb-verify.log` and `history-crash-runtime.log`. Reference archive
+identity and file mapping are checked in
+at `engine/manifests/brave-reference.json`; the current publisher audit is
+`build-engine-reference/engine-audit-current.json`.
+
+The target Majoris desktop/accounts are unavailable by the user's confirmation.
+Wayland, actual dock grouping, Orca, Google Sheets/provider accounts and system
+installation are unverified. Codec redistribution and production readiness are
+not approved.
+
 ## Production-readiness pass — revision 0.1.0-6
 
 Reviewed clean main 82684a8c265def0cd06d34d75272cb8e5076ce99, matched origin/main before modification. The selected runtime remains CEF 152.0.14 / Chromium 152.0.7977.167. Current audit: build/production-engine-audit.json; all ten CNA records: build/production-cve-assessment.json; exact CEF and Chromium maintenance source evidence and V8 mappings are recorded alongside the security assessment. Production is not approved.

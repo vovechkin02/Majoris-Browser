@@ -49,7 +49,7 @@ with tempfile.TemporaryDirectory(prefix='majoris-package-', dir='/tmp') as temp:
                 'cef-site-cookies', 'cef-storage-isolation', 'cef-credentials',
                 'cef-cookie-isolation', 'cef-native-notifications', 'gtk-smoke',
                 'cef-exit', 'app-uninstall', 'cef-modern-credentials', 'gtk-drag',
-                'cef-accessibility', 'gtk-accessibility', 'cef-authentication',
+                'cef-accessibility', 'cef-history', 'cef-native-pip', 'gtk-accessibility', 'cef-authentication',
                 'cef-platform', 'cef-context-menus', 'cef-printing'}
     results = [json.loads(line) for line in (logs / 'testlog.json').read_text().splitlines()]
     if {result['name'] for result in results} != expected or any(

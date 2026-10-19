@@ -1,8 +1,37 @@
 # Completion matrix — 19 October 2026
 
-## Authoritative production-readiness matrix (main 82684a8)
+## Custom engine qualification — revision 0.1.0-7
 
-This matrix supersedes every historical matrix below. Local implementation/fixtures do not qualify production accounts, maintained signature distribution, licensed codecs or unavailable target desktops.
+This matrix supersedes earlier SDK-only assessments. The custom .169 engine
+and SDK are built. Fresh standard and custom runtime runs each pass 27/27;
+actual codecs, native PiP, AX/AT-SPI actions and history restoration are verified.
+Production release approval is separate from these local runtime results.
+See [the engine guide](../engine/README.md), [patch maintenance](../engine/PATCH-MAINTENANCE.md)
+and [verification records](verification-results.md).
+
+| Feature | Classification | Verified | Remaining issue |
+| --- | --- | --- | --- |
+| Custom CEF build | Complete and tested | Pinned dependencies, checked patches, CFI/ThinLTO link, SDK/binary provenance; 27/27 custom | Release approval remains separate |
+| Chromium security updates | Complete and tested | Complete .169 maintenance source, exact binary/header identity, sandbox/TLS/isolation regressions | Build-time approval flags remain false; production release is not approved |
+| H.264 playback | Complete and tested | Actual decoded frames in browser and installed-app contexts | Redistribution approval, hardware decode/physical output unverified |
+| AAC playback | Complete and tested | Actual nonzero audio samples in both contexts | Same redistribution/output gates |
+| MP4 playback | Complete and tested | Combined H.264 video and AAC audio in both contexts | Same redistribution/output gates |
+| Picture-in-Picture | Complete and tested | Native advancing pixels, resize/close, selected second video, stale refusal, navigation/crash/source cleanup; browser/app/private | Target compositor checks separate |
+| Linux PiP application identity | Complete and tested | Browser/app WM_CLASS on X11 | Wayland app_id and actual dock grouping unverified |
+| Accessibility actions | Upstream dependency | Real activation/focus, Unicode AT-SPI editing, native selection, protected/stale/malformed refusal | GTK 4.18 direct Text selection/caret setters unsupported; Orca unavailable; exact source evidence in architecture guide |
+| Full navigation history | Complete and tested | Selected entry/back/forward, no URL replay, private/profile/version/malformed fallback | Bounded safe GET state; POST/file/unsafe state uses URL fallback |
+| Extended Task Manager | Complete and tested | Live renderer PID verified in /proc, native network/root fields, refresh and task kill | Root task IDs are not a full OS process hierarchy |
+| Browser compatibility | Complete and tested | 27/27 standard and custom local regression groups | Native target desktop checks separate |
+| Web-app compatibility | External dependency | Isolated local app profiles, identities, storage/auth/routing, media/PiP/lifecycle regressions | Real Sheets/provider accounts and target desktop unavailable |
+| Wayland compatibility | External dependency | Source identity integration; X11 regressions | Target Majoris desktop unavailable, confirmed by user |
+| Debian packaging | Complete and tested | Custom development .deb; 27/27 package tests; archive/provenance/license and extracted GTK/CEF smoke pass | System installation/upgrade and production distribution unverified/unapproved |
+
+Codec redistribution approval, Widevine, real accounts, maintained threat/scanner
+services and unavailable target desktop checks remain separate external gates.
+
+## Historical production-readiness matrix (main 82684a8)
+
+The following matrix records the earlier standard-SDK pass. The custom-engine matrix above is authoritative for this task. Local fixtures do not qualify production accounts, maintained signature distribution, codec redistribution or unavailable target desktops.
 
 | Feature | Implemented | Verified | Remaining limitation |
 |---|---|---|---|

@@ -7,6 +7,8 @@ namespace MajorisBrowser {
         public bool loading;
         public bool can_go_back;
         public bool can_go_forward;
+        public string navigation_state="";
+        public string navigation_state_url="";
         public string security=_("Connection information is not available yet");
         public string certificate_info="{}";
         public Bytes? favicon;
@@ -43,8 +45,8 @@ namespace MajorisBrowser {
         private double pointer_y;
         private Gtk.Box error_box=new Gtk.Box(Gtk.Orientation.VERTICAL,12);
         private Gtk.Label error_message=new Gtk.Label("");
-        public OffscreenBrowserSurface (string profile, bool ephemeral, string target, string scope = "",string permissions="[]",bool threat_checks=false) {
-            this.with_engine(new MajorisCef.View.with_security(profile,ephemeral,target,scope,permissions,threat_checks));
+        public OffscreenBrowserSurface (string profile, bool ephemeral, string target, string scope = "",string permissions="[]",bool threat_checks=false,string history="") {
+            this.with_engine(new MajorisCef.View.with_session(profile,ephemeral,target,scope,permissions,threat_checks,ephemeral?"":history));
         }
         public OffscreenBrowserSurface.with_engine(MajorisCef.View supplied) {
             WebDrag.attach(this);
@@ -67,6 +69,10 @@ namespace MajorisBrowser {
                 if(kind=="accessibility-tree"){accessibility.consume(value);return;}
                 if(kind=="accessibility-location"){accessibility.consume_locations(value);return;}
                 if(kind=="navigation-started" || kind=="crashed")accessibility.clear();
+                if(kind=="history"){
+                    navigation_state="";navigation_state_url="";
+                    if(value!="" && value.length<=4*1024*1024)try{var parser=new Json.Parser();parser.load_from_data(value);navigation_state_url=parser.get_root().get_object().get_string_member("selected_url");navigation_state=value;}catch(Error e){warning("Invalid native session state");}
+                }
                 audio_state.update(kind,value);
 
                 if (kind == "url") {url = value;security=_("Connection information is not available yet");certificate_info="{}";}

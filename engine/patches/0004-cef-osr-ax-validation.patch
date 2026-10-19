@@ -1,0 +1,18 @@
+--- a/libcef/browser/osr/browser_platform_delegate_osr.cc
++++ b/libcef/browser/osr/browser_platform_delegate_osr.cc
+@@ -3,6 +3,7 @@
+ // found in the LICENSE file.
+ 
+ #include "cef/libcef/browser/osr/browser_platform_delegate_osr.h"
++#include "cef/libcef/browser/majoris_runtime_internal.h"
+ 
+ #include <utility>
+ 
+@@ -626,6 +627,7 @@
+ 
+ void CefBrowserPlatformDelegateOsr::AccessibilityEventReceived(
+     const ui::AXUpdatesAndEvents& details) {
++  MajorisRecordAXUpdate(browser_->GetWebContents(), details);
+   if (auto handler = browser_->client()->GetRenderHandler()) {
+     if (auto acc_handler = handler->GetAccessibilityHandler()) {
+       acc_handler->OnAccessibilityTreeChange(

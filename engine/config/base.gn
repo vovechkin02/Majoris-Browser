@@ -1,0 +1,7 @@
+is_official_build=true
+is_component_build=false
+symbol_level=1
+use_thin_lto=true
+chrome_pgo_phase=0
+use_remoteexec=false
+use_sysroot=true

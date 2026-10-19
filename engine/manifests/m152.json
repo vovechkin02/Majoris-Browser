@@ -1,0 +1,35 @@
+{
+  "schema": 1,
+  "cef_branch": "7977",
+  "cef_commit": "8a0b5b99fd4aac7e353f847685be05577298970c",
+  "chromium_version": "152.0.7977.169",
+  "chromium_commit": "92a6f15143569cf59b340472d0b5030465d95722",
+  "depot_tools_commit": "d38909eb68d85b91259f4bf20fe5ebcd38461bc2",
+  "automate_sha256": "fe0c880fd2a91ac3ab4c82301f596295cecc1901e503507e36300a5b58578dcd",
+  "brave_reference_commit": "dcbdb34da3fd9339b39428b370ed4cc07a18580a",
+  "brave_chromium_version": "155.0.8059.30",
+  "security_qualified": false,
+  "redistribution_approved": false,
+  "patches": [
+    {
+      "path": "patches/0001-cef-linux-native-pip.patch",
+      "repository": "cef",
+      "sha256": "30f4e93b736d3389cb0806fafdfdf731758a3ed389e9a4e96d8065fb66a0bd5b"
+    },
+    {
+      "path": "patches/0002-chromium-pip-desktop-identity.patch",
+      "repository": "chromium",
+      "sha256": "5928bf260b5cd37b9e0863642fcaa6331f58016619248dafa0f5a9f875b4b9d8"
+    },
+    {
+      "path": "patches/0003-cef-network-task-sampling.patch",
+      "repository": "cef",
+      "sha256": "024d9d36e37e242bf62eb0a751dc9de7704589d25ab237f530ba551072df1867"
+    },
+    {
+      "path": "patches/0004-cef-osr-ax-validation.patch",
+      "repository": "cef",
+      "sha256": "e8851e8bd3f84f1cf94306ebbda6f6ce4af77548b1b4f2407c0627f230427c01"
+    }
+  ]
+}

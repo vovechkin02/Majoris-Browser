@@ -1,2 +1,2 @@
-option('cef_root', type: 'string', value: '', description: 'Extracted CEF 152.0.14 Linux64 SDK')
+option('cef_root', type: 'string', value: '', description: 'Explicit prepared Linux64 CEF SDK, standard or pinned custom engine')
 option('domain_only', type: 'boolean', value: false, description: 'Build headless domain tests without CEF or GTK')

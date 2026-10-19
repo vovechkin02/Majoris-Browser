@@ -1,0 +1,34 @@
+{
+  "archive": "brave-core-master.zip",
+  "sha256": "5dbaa9a01bd30f8def8cf5d1f51f5252a8ec7f10d54bddb09f28a915f78cc5c1",
+  "archive_commit_comment": "dcbdb34da3fd9339b39428b370ed4cc07a18580a",
+  "brave_version": "1.99.9",
+  "chromium_version": "155.0.8059.30",
+  "references": [
+    {
+      "brave": "build/args/blink_platform_defaults.gni",
+      "upstream": "media/media_options.gni and third_party/ffmpeg/ffmpeg_options.gni",
+      "majoris": "engine/config/development-codecs.gn",
+      "adaptation": "Explicit development-only native codec configuration, separate from distribution approval"
+    },
+    {
+      "brave": "browser/ui/views/overlay/brave_video_overlay_window_views.cc",
+      "upstream": "chrome/browser/ui/views/overlay/video_overlay_window_views.cc",
+      "majoris": "engine/patches/0002-chromium-pip-desktop-identity.patch",
+      "adaptation": "CEF Alloy has no Chrome TabInterface application window. Majoris supplies its existing per-process installed-app desktop identity before CEF initialization. Retain the native Chromium overlay/controller/surface."
+    },
+    {
+      "brave": "chromium_src/chrome/browser/ui/views/overlay/video_overlay_window_views.cc and patches/chrome-browser-ui-views-overlay-video_overlay_window_views.cc.patch",
+      "upstream": "VideoOverlayWindowViews factory",
+      "majoris": "engine/patches/0001-cef-linux-native-pip.patch and 0002-chromium-pip-desktop-identity.patch",
+      "adaptation": "Small gate and initialization changes, without Brave's subclass UI, Leo controls or Chrome browser window dependencies"
+    },
+    {
+      "brave": "docs/best-practices/chromium-src-overrides.md",
+      "upstream": "CEF/Chromium build and patch workflow",
+      "majoris": "engine/scripts and engine/PATCH-MAINTENANCE.md",
+      "adaptation": "Isolated extensions and checked patches; retain CEF's supported source build workflow"
+    }
+  ],
+  "licensing": "Inspected Brave overlay/reference files contain MPL-2.0 notices. No Brave UI, branding, icons, services or implementation bodies are copied; Majoris adaptations are independently implemented."
+}
