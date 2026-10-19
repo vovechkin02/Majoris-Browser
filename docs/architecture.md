@@ -1,3 +1,20 @@
+> **Current release-hardening record (0.1.0-8):** [release-hardening.md](release-hardening.md). Reviewed source: `27611aa41c806398fb0560aded3853a2a9ba53ec`. The security candidate retains four Majoris patches and adds twelve patches covering thirteen upstream maintenance/security commits. The candidate build, clean 30/30, Debian 30/30 and extracted-runtime verification passed locally. Production, redistribution and native-desktop approval remain pending. Earlier dated completion claims below are historical and do not qualify this candidate.
+
+## Current integration boundaries
+
+The existing Vala/GTK4 UI, C++ CEF bridge, SQLite schema and Secret Service
+ownership remain. GTK's actual display backend selects CEF Ozone; GDK supplies
+fractional scale and monitor geometry in logical pixels without fabricating
+Wayland window coordinates. The native profile guard runs under the exclusive
+lease before CEF initialization and refuses newer/malformed version markers.
+
+The existing download-security provider now exposes bounded live health probes
+and shutdown cancellation. Downloads consumes those states instead of treating
+an installed adapter as operational. The optional Python managed-threat backend
+is a separate operator component of the existing Web Risk contract, never an
+application startup dependency. Release records/resource inventories belong to
+build/distribution tooling and do not alter browser/app profile ownership.
+
 # Custom engine integration — 19 October 2026
 
 The application remains Vala/GTK4/libadwaita with the existing C++ CEF bridge.

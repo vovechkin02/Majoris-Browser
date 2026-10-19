@@ -95,6 +95,7 @@ class Client : public CefClient, public CefLifeSpanHandler, public CefRenderHand
   CefRefPtr<CefBrowser> browser;
   CefRefPtr<CefRequestContext> context;
   int width=800, height=600;
+  CefRect monitor_rect;
   float scale=1;
   bool closing=false;
   std::atomic<bool> threat_checks=false;
@@ -556,7 +557,7 @@ class Client : public CefClient, public CefLifeSpanHandler, public CefRenderHand
     if(gesture) event(disposition==CEF_WOD_NEW_BACKGROUND_TAB?"popup-background":disposition==CEF_WOD_NEW_WINDOW?"popup-window":"popup",url.ToString()); return true;
   }
   void GetViewRect(CefRefPtr<CefBrowser>,CefRect &r) override { r=CefRect(0,0,width,height); }
-  bool GetScreenInfo(CefRefPtr<CefBrowser>,CefScreenInfo &i) override { i.device_scale_factor=scale; i.rect=CefRect(0,0,width,height); i.available_rect=i.rect; return true; }
+  bool GetScreenInfo(CefRefPtr<CefBrowser>,CefScreenInfo &i) override { i.device_scale_factor=scale; i.rect=monitor_rect.width>0?monitor_rect:CefRect(0,0,width,height); i.available_rect=i.rect; return true; }
   void OnPopupShow(CefRefPtr<CefBrowser> b,bool visible) override {popup_visible=visible;if(!visible){popup_pixels.clear();b->GetHost()->Invalidate(PET_VIEW);}}
   void OnPopupSize(CefRefPtr<CefBrowser>,const CefRect &rect) override {popup_rect=rect;}
   void OnImeCompositionRangeChanged(CefRefPtr<CefBrowser>,const CefRange &range,const RectList &bounds) override {
@@ -746,6 +747,7 @@ class CacheCleared : public CefCompletionCallback {
   void OnComplete() override {client->event("operation-complete","clear-http-cache");}
  private: IMPLEMENT_REFCOUNTING(CacheCleared);
 };
+static std::string display_backend;
 class App : public CefApp, public CefBrowserProcessHandler, public CefResourceBundleHandler {
  public:
   std::string display_name=g_getenv("MAJORIS_CEF_DISPLAY_NAME")?g_getenv("MAJORIS_CEF_DISPLAY_NAME"):"Majoris Browser";
@@ -758,6 +760,7 @@ class App : public CefApp, public CefBrowserProcessHandler, public CefResourceBu
   void OnBeforeCommandLineProcessing(const CefString&,CefRefPtr<CefCommandLine> command) override {
     command->AppendSwitch("no-first-run");command->AppendSwitch("no-default-browser-check");
     if(g_getenv("MAJORIS_CEF_TEST_HEADLESS")){command->AppendSwitchWithValue("ozone-platform","headless");command->AppendSwitch("disable-gpu");}
+    else if(!display_backend.empty())command->AppendSwitchWithValue("ozone-platform",display_backend);
     // Disposable integration fixtures must not open a desktop keyring prompt.
     // Credential tests still exercise libsecret against their own unlocked service.
     if(g_getenv("MAJORIS_CEF_TEST_BASIC_STORE"))command->AppendSwitchWithValue("password-store","basic");
@@ -767,6 +770,7 @@ class App : public CefApp, public CefBrowserProcessHandler, public CefResourceBu
 };
 }
 
+gboolean mc_runtime_set_display_backend(const char *backend){if(initialized || !backend || (std::string(backend)!="wayland" && std::string(backend)!="x11"))return false;display_backend=backend;return true;}
 static void mc_view_finalize(GObject *object) {
   auto *v=MC_VIEW(object); mc_view_close(v); delete v->state;
   G_OBJECT_CLASS(mc_view_parent_class)->finalize(object);
@@ -791,6 +795,7 @@ gboolean mc_runtime_initialize(const char *root,const char *helper,const char *r
   }
   if(!g_path_is_absolute(helper) || !g_file_test(helper,G_FILE_TEST_IS_EXECUTABLE)){g_set_error_literal(error,g_quark_from_static_string("majoris-cef"),4,"CEF subprocess helper is missing or not executable");return false;}
   profile_lock=majoris_profile_acquire(root,error);if(profile_lock<0)return false;
+  if(!majoris_profile_version(root,chrome_version().c_str(),error)){majoris_profile_release(profile_lock);profile_lock=-1;return false;}
   g_message("CEF: initializing %s",CEF_VERSION);
   cef_api_hash(CEF_API_VERSION,0);
   g_message("CEF: API selected");
@@ -874,6 +879,7 @@ void mc_view_accessibility_action(McView *v,const char *tree,const char *documen
 }
 void mc_view_set_threat_checks(McView *v,gboolean enabled){v->state->client->threat_checks=enabled;}
 void mc_view_load(McView *v,const char *url) { auto c=v->state->client; std::string s=url; ui([c,s]{if(c->browser)c->browser->GetMainFrame()->LoadURL(s);}); }
+void mc_view_set_screen(McView *v,int x,int y,int w,int h){auto c=v->state->client;ui([c,x,y,w,h]{c->monitor_rect=CefRect(std::clamp(x,-1000000,1000000),std::clamp(y,-1000000,1000000),std::clamp(w,1,65536),std::clamp(h,1,65536));if(c->browser)c->browser->GetHost()->NotifyScreenInfoChanged();});}
 void mc_view_resize(McView *v,int w,int h,double s) { auto c=v->state->client; ui([c,w,h,s]{c->width=std::clamp(w,1,16384); c->height=std::clamp(h,1,16384); c->scale=std::isfinite(s)?std::clamp(s,0.5,4.0):1; if(c->browser){c->browser->GetHost()->NotifyScreenInfoChanged(); c->browser->GetHost()->WasResized();}}); }
 void mc_view_focus(McView *v,gboolean focus) { auto c=v->state->client; ui([c,focus]{if(c->browser)c->browser->GetHost()->SetFocus(focus);}); }
 void mc_view_reply(McView *v,int token,gboolean yes,const char *text) {auto c=v->state->client; std::string s=text; ui([c,token,yes,s]{c->reply(token,yes,s);});}

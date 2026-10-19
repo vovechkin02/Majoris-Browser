@@ -8,6 +8,47 @@
 #include <unistd.h>
 #include <cerrno>
 #include <string>
+#include <array>
+#include <charconv>
+
+static bool parse_version(std::string text,std::array<unsigned,4>& parts){
+  while(!text.empty() && (text.back()=='\n' || text.back()=='\r'))text.pop_back();
+  size_t start=0;
+  for(size_t i=0;i<4;i++){
+    size_t end=text.find('.',start);if((i<3 && end==std::string::npos) || (i==3 && end!=std::string::npos))return false;
+    if(end==std::string::npos)end=text.size();
+    auto result=std::from_chars(text.data()+start,text.data()+end,parts[i]);
+    if(result.ec!=std::errc() || result.ptr!=text.data()+end)return false;start=end+1;
+  }return true;
+}
+bool majoris_profile_version(const char *path,const char *version,GError **error){
+  std::array<unsigned,4> current{},previous{};
+  if(!parse_version(version,current)){g_set_error_literal(error,G_IO_ERROR,G_IO_ERROR_INVALID_DATA,"Invalid runtime version");return false;}
+  if(g_mkdir_with_parents(path,0700)!=0){g_set_error_literal(error,G_IO_ERROR,G_IO_ERROR_FAILED,"Cannot create runtime profile");return false;}
+  int directory=open(path,O_RDONLY|O_DIRECTORY|O_NOFOLLOW|O_CLOEXEC);
+  if(directory<0){g_set_error_literal(error,G_IO_ERROR,G_IO_ERROR_FAILED,"Cannot safely open runtime profile");return false;}
+  bool ok=true;std::string last;
+  // Chromium's own marker also protects profiles predating Majoris's guard.
+  for(const char* marker:{"majoris-engine-version","Last Version"}){
+    int input=openat(directory,marker,O_RDONLY|O_NOFOLLOW|O_CLOEXEC|O_NONBLOCK);
+    if(input<0){if(errno!=ENOENT)ok=false;continue;}
+    struct stat st{};char buffer[129];ssize_t count=-1;
+    if(fstat(input,&st)==0 && S_ISREG(st.st_mode))count=read(input,buffer,sizeof(buffer));close(input);
+    if(count<=0 || count>128 || !parse_version(std::string(buffer,count),previous) || previous>current){ok=false;break;}
+  }
+  if(ok){
+    int output=openat(directory,".majoris-engine-version.tmp",O_WRONLY|O_CREAT|O_EXCL|O_NOFOLLOW|O_CLOEXEC,0600);
+    // A crash can leave our own temporary marker; never follow it.
+    if(output<0 && errno==EEXIST){unlinkat(directory,".majoris-engine-version.tmp",0);output=openat(directory,".majoris-engine-version.tmp",O_WRONLY|O_CREAT|O_EXCL|O_NOFOLLOW|O_CLOEXEC,0600);}
+    std::string data=std::string(version)+"\n";
+    ok=output>=0 && write(output,data.data(),data.size())==static_cast<ssize_t>(data.size()) && fsync(output)==0;
+    if(output>=0)close(output);
+    if(ok)ok=renameat(directory,".majoris-engine-version.tmp",directory,"majoris-engine-version")==0 && fsync(directory)==0;
+  }
+  close(directory);
+  if(!ok)g_set_error_literal(error,G_IO_ERROR,G_IO_ERROR_FAILED,"Profile version is newer, invalid or inaccessible. Use a compatible runtime; no profile data was reset.");
+  return ok;
+}
 
 // Hold real parent directories rather than resolving a mutable pathname again
 // during deletion. Neither parent traversal nor recursion follows symlinks.

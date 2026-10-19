@@ -1,0 +1,18 @@
+# Merge into an operator-maintained supported clamd configuration. Not installed
+# or activated by Browser. Use Debian clamav-daemon/clamav-freshclam packages.
+LocalSocket /run/clamav/majoris.sock
+LocalSocketGroup majoris-browser-scanner
+LocalSocketMode 660
+FixStaleSocket yes
+User clamav
+DatabaseDirectory /var/lib/clamav
+MaxThreads 2
+MaxQueue 8
+StreamMaxLength 64M
+MaxFileSize 64M
+MaxScanSize 256M
+MaxScanTime 20000
+MaxRecursion 16
+MaxFiles 10000
+HeuristicAlerts yes
+AlertExceedsMax yes

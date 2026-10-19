@@ -23,7 +23,7 @@ namespace MajorisBrowser {
             sessions=new SessionService(this);
             permissions=new PermissionService(storage,app==null?"browser":app.id);
             permissions.policies_changed.connect((profile)=>{if(ProfilePaths.valid_id(profile) && (webapp==null || webapp.id!=profile))notify_permission_change.begin(profile);});
-            DownloadSecurityProvider scanner=preferences.get_string("download-scanner-socket")==""?(DownloadSecurityProvider)new NoDownloadScanner():new ClamdDownloadScanner(preferences.get_string("download-scanner-socket"));downloads=new DownloadService(this,scanner);
+            DownloadSecurityProvider scanner=preferences.get_string("download-scanner-socket")==""?(DownloadSecurityProvider)new NoDownloadScanner():new ClamdDownloadScanner(preferences.get_string("download-scanner-socket"),preferences.get_uint("download-scanner-max-mib"));downloads=new DownloadService(this,scanner);
             downloads.threat_detected.connect((record)=>{if(active_window!=null)EngineDialogs.show_error(active_window,_("Known threat detected in downloaded file: %s. Opening is blocked. The file has been retained.").printf(record.filename));});
         }
         protected override void startup () {
@@ -45,6 +45,8 @@ namespace MajorisBrowser {
                 Environment.set_variable("CHROME_DESKTOP",webapp==null?"com.majoris.browser.desktop":webapp.desktop_name,true);
                 Environment.set_variable("MAJORIS_CEF_DISPLAY_NAME",webapp==null?"Majoris Browser":webapp.name,true);
                 if(!preferences.get_boolean("hardware-acceleration"))Environment.set_variable("MAJORIS_CEF_DISABLE_GPU","1",true);else Environment.unset_variable("MAJORIS_CEF_DISABLE_GPU");
+                var display=Gdk.Display.get_default();string backend=display!=null?display.get_type().name():"";
+                if(!MajorisCef.set_display_backend(backend=="GdkWaylandDisplay"?"wayland":"x11"))throw new IOError.FAILED("Cannot select the Chromium display backend");
                 MajorisCef.initialize (profile,helper,resources); runtime_started=true; return true;
             } catch (Error e) { critical ("CEF: %s",e.message); return false; }
         }
@@ -87,7 +89,7 @@ namespace MajorisBrowser {
             window.present ();
         }
         protected override void shutdown () {
-            downloads.flush();
+            downloads.stop();
             sessions.stop();
             storage.stop (); if (runtime_started) {MajorisCef.shutdown ();runtime_started=false;}
             if(exit_operation.finish(!runtime_started)){try{MajorisCef.clear_profile(paths.browser_context);}catch(Error e){critical("Browser profile clearing: %s",e.message);}}

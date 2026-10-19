@@ -39,13 +39,14 @@ with tempfile.TemporaryDirectory(prefix='majoris-package-', dir='/tmp') as temp:
         shutil.copyfile(original, target)
         target.chmod(0o644)
     shutil.copytree(source / 'packaging/debian', source / 'debian')
+    (source/'.majoris-source-revision').write_text(subprocess.check_output(['git','rev-parse','HEAD'],cwd=repo,text=True).strip()+'\n')
     rules = source / 'debian/rules'
     rules.write_text(rules.read_text())
     rules.chmod(0o755)
     subprocess.run(['dpkg-buildpackage', '-b', '-uc', '-us'], cwd=source,
                    env=environment, check=True)
     logs = source / 'obj-x86_64-linux-gnu/meson-logs'
-    expected = {'download-scanner', 'domain', 'threat-protection', 'web-risk-provider', 'cef-threat-navigation', 'cef-media-playback', 'cef-close', 'cef-permissions', 'cef-downloads',
+    expected = {'download-ui', 'managed-threat-backend', 'release-policy', 'download-scanner', 'domain', 'threat-protection', 'web-risk-provider', 'cef-threat-navigation', 'cef-media-playback', 'cef-close', 'cef-permissions', 'cef-downloads',
                 'cef-site-cookies', 'cef-storage-isolation', 'cef-credentials',
                 'cef-cookie-isolation', 'cef-native-notifications', 'gtk-smoke',
                 'cef-exit', 'app-uninstall', 'cef-modern-credentials', 'gtk-drag',
@@ -58,6 +59,7 @@ with tempfile.TemporaryDirectory(prefix='majoris-package-', dir='/tmp') as temp:
     if 'stack smashing detected' in (logs / 'testlog.txt').read_text():
         raise SystemExit('Subprocess stack-canary failure appeared in package test output')
     output.mkdir()
+    shutil.copytree(logs,output/'test-logs')
     for pattern in ('*.deb', '*.buildinfo', '*.changes'):
         for artifact in root.glob(pattern):
             shutil.copy2(artifact, output / artifact.name)

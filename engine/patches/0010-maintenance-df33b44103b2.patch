@@ -1,0 +1,256 @@
+diff --git a/chrome/browser/apps/platform_apps/app_window_browsertest.cc b/chrome/browser/apps/platform_apps/app_window_browsertest.cc
+index 5a2b8e08..2c51b68 100644
+--- a/chrome/browser/apps/platform_apps/app_window_browsertest.cc
++++ b/chrome/browser/apps/platform_apps/app_window_browsertest.cc
+@@ -4,6 +4,7 @@
+ 
+ #include "extensions/browser/app_window/app_window.h"
+ 
++#include "base/command_line.h"
+ #include "base/memory/raw_ptr.h"
+ #include "base/run_loop.h"
+ #include "build/build_config.h"
+@@ -13,12 +14,17 @@
+ #include "chrome/browser/profiles/profile.h"
+ #include "chrome/browser/ui/apps/chrome_app_window_client.h"
+ #include "chrome/browser/ui/browser.h"
++#include "chrome/common/chrome_switches.h"
+ #include "components/services/app_service/public/cpp/app_launch_params.h"
+ #include "components/services/app_service/public/cpp/app_launch_util.h"
++#include "content/public/browser/web_contents.h"
+ #include "content/public/test/browser_test.h"
++#include "content/public/test/browser_test_utils.h"
+ #include "content/public/test/test_utils.h"
+ #include "extensions/browser/app_window/app_window_geometry_cache.h"
+ #include "extensions/browser/app_window/native_app_window.h"
++#include "extensions/browser/extension_host.h"
++#include "extensions/browser/process_manager.h"
+ #include "extensions/common/constants.h"
+ #include "extensions/common/extension.h"
+ #include "extensions/common/extension_id.h"
+@@ -339,3 +345,79 @@
+   extensions::AppWindowClient::Set(nullptr);
+   extensions::AppWindowClient::Set(ChromeAppWindowClient::GetInstance());
+ }
++
++// Regression test for crbug.com/569650568: when `chrome.app.window.create()`
++// is called with `state: "fullscreen"`, `AppWindow::Init()` calls
++// `Fullscreen()`. If `SetFullscreen()` synchronously closes the native window
++// and deletes `AppWindow`, `Init()` and `AppWindowCreateFunction::Run()` must
++// not continue accessing the destroyed `AppWindow`.
++IN_PROC_BROWSER_TEST_F(AppWindowAPITest, UafInAppWindowInitFullscreenState) {
++  const extensions::Extension* extension = LoadExtension(
++      test_data_dir_.AppendASCII("platform_apps").AppendASCII("window_api"));
++  ASSERT_TRUE(extension);
++
++  TestAppWindowClient test_client;
++  extensions::AppWindowClient::Set(nullptr);
++  extensions::AppWindowClient::Set(&test_client);
++
++  extensions::ProcessManager* process_manager =
++      extensions::ProcessManager::Get(browser()->GetProfile());
++  extensions::ExtensionHost* background_host =
++      process_manager->GetBackgroundHostForExtension(extension->id());
++  ASSERT_TRUE(background_host);
++
++  EXPECT_EQ("App window is closed before ready to commit first navigation.",
++            content::EvalJs(background_host->host_contents(), R"(
++              new Promise(resolve => {
++                chrome.app.window.create(
++                    'test.html', {state: 'fullscreen'}, () => {
++                      resolve(chrome.runtime.lastError
++                                  ? chrome.runtime.lastError.message
++                                  : 'ok');
++                    });
++              })
++            )"));
++  EXPECT_EQ(0u, GetAppWindowCount());
++
++  extensions::AppWindowClient::Set(nullptr);
++  extensions::AppWindowClient::Set(ChromeAppWindowClient::GetInstance());
++}
++
++// Regression test for crbug.com/569650568: in forced app mode,
++// `AppWindowCreateFunction::Run()` calls `app_window->ForcedFullscreen()` after
++// `app_window->Init()`. If `ForcedFullscreen()` synchronously closes the native
++// window and deletes `AppWindow`, `Run()` must not continue accessing the
++// destroyed `AppWindow`.
++IN_PROC_BROWSER_TEST_F(AppWindowAPITest, UafInAppWindowCreateForcedFullscreen) {
++  base::CommandLine::ForCurrentProcess()->AppendSwitch(
++      ::switches::kForceAppMode);
++
++  const extensions::Extension* extension = LoadExtension(
++      test_data_dir_.AppendASCII("platform_apps").AppendASCII("window_api"));
++  ASSERT_TRUE(extension);
++
++  TestAppWindowClient test_client;
++  extensions::AppWindowClient::Set(nullptr);
++  extensions::AppWindowClient::Set(&test_client);
++
++  extensions::ProcessManager* process_manager =
++      extensions::ProcessManager::Get(browser()->GetProfile());
++  extensions::ExtensionHost* background_host =
++      process_manager->GetBackgroundHostForExtension(extension->id());
++  ASSERT_TRUE(background_host);
++
++  EXPECT_EQ("App window is closed before ready to commit first navigation.",
++            content::EvalJs(background_host->host_contents(), R"(
++              new Promise(resolve => {
++                chrome.app.window.create('test.html', {}, () => {
++                  resolve(chrome.runtime.lastError
++                              ? chrome.runtime.lastError.message
++                              : 'ok');
++                });
++              })
++            )"));
++  EXPECT_EQ(0u, GetAppWindowCount());
++
++  extensions::AppWindowClient::Set(nullptr);
++  extensions::AppWindowClient::Set(ChromeAppWindowClient::GetInstance());
++}
+diff --git a/chrome/browser/ui/views/apps/chrome_native_app_window_views_aura_ash.cc b/chrome/browser/ui/views/apps/chrome_native_app_window_views_aura_ash.cc
+index 75871ef..3b0873e8 100644
+--- a/chrome/browser/ui/views/apps/chrome_native_app_window_views_aura_ash.cc
++++ b/chrome/browser/ui/views/apps/chrome_native_app_window_views_aura_ash.cc
+@@ -616,7 +616,12 @@
+   if (new_state != ui::mojom::WindowShowState::kFullscreen &&
+       new_state != ui::mojom::WindowShowState::kMinimized &&
+       app_window()->IsFullscreen()) {
++    base::WeakPtr<extensions::AppWindow> weak_app_window =
++        app_window()->GetWeakPtr();
+     app_window()->Restore();
++    if (!weak_app_window) {
++      return;
++    }
+   }
+ 
+   // Usually OnNativeWindowChanged() is called when the window bounds are
+diff --git a/extensions/browser/api/app_window/app_window_api.cc b/extensions/browser/api/app_window/app_window_api.cc
+index 09ca84e3..aeeee2f 100644
+--- a/extensions/browser/api/app_window/app_window_api.cc
++++ b/extensions/browser/api/app_window/app_window_api.cc
+@@ -385,12 +385,19 @@
+   if (!app_window)
+     return RespondNow(Error(app_window_constants::kAppWindowCreationFailed));
+ 
++  base::WeakPtr<AppWindow> weak_app_window = app_window->GetWeakPtr();
+   app_window->Init(url, std::make_unique<AppWindowContentsImpl>(app_window),
+                    render_frame_host(), create_params);
++  if (!weak_app_window) {
++    return RespondNow(Error(app_window_constants::kPrematureWindowClose));
++  }
+ 
+   if (ExtensionsBrowserClient::Get()->IsRunningInForcedAppMode() &&
+       !app_window->is_ime_window()) {
+     app_window->ForcedFullscreen();
++    if (!weak_app_window) {
++      return RespondNow(Error(app_window_constants::kPrematureWindowClose));
++    }
+   }
+ 
+   if (AppWindowRegistry::Get(browser_context())
+diff --git a/extensions/browser/app_window/app_window.cc b/extensions/browser/app_window/app_window.cc
+index 9ca9cf69..d806ec4 100644
+--- a/extensions/browser/app_window/app_window.cc
++++ b/extensions/browser/app_window/app_window.cc
+@@ -336,6 +336,7 @@
+ 
+   AppWindowRegistry::Get(browser_context_)->AddAppWindow(this);
+ 
++  base::WeakPtr<AppWindow> weak_this = weak_ptr_factory_.GetWeakPtr();
+   if (new_params.hidden) {
+     // Although the window starts hidden by default, calling Hide() here
+     // notifies observers of the window being hidden.
+@@ -351,9 +352,19 @@
+       Minimize();
+     }
+ 
++    // `Fullscreen()` (or another state transition) can synchronously close the
++    // window and destroy `this`.
++    if (!weak_this) {
++      return;
++    }
++
+     Show(new_params.focused ? SHOW_ACTIVE : SHOW_INACTIVE);
+   }
+ 
++  if (!weak_this) {
++    return;
++  }
++
+   OnNativeWindowChanged();
+ 
+   ExtensionRegistry::Get(browser_context_)->AddObserver(this);
+diff --git a/extensions/browser/app_window/app_window.h b/extensions/browser/app_window/app_window.h
+index 210a39c..5d8614d3 100644
+--- a/extensions/browser/app_window/app_window.h
++++ b/extensions/browser/app_window/app_window.h
+@@ -237,6 +237,10 @@
+   AppWindow& operator=(const AppWindow&) = delete;
+ 
+   // Initializes the render interface, web contents, and native window.
++  // Note: Initial window state transitions (such as entering fullscreen) may
++  // synchronously close the native window and destroy `this` (e.g., if a
++  // nested run loop spins during the transition). Callers that access the
++  // AppWindow after calling Init() must check liveness via GetWeakPtr().
+   void Init(const GURL& url,
+             std::unique_ptr<AppWindowContents> app_window_contents,
+             content::RenderFrameHost* creator_frame,
+@@ -307,6 +311,9 @@
+   // not exit fullscreen mode because a window may have a different type of
+   // fullscreen enabled). If `type` is not FORCED, checks that the extension has
+   // the required permission.
++  // Note: Transitioning fullscreen state may synchronously close the native
++  // window and destroy `this`. Callers that access the AppWindow after this
++  // call must check liveness via GetWeakPtr().
+   void SetFullscreen(FullscreenType type, bool enable);
+ 
+   // Returns true if the app window is in a fullscreen state.
+@@ -324,16 +331,26 @@
+ 
+   // Transitions window into fullscreen, maximized, minimized or restores based
+   // on chrome.app.window API.
++  // Note: Fullscreen() and Restore() (when exiting fullscreen) may
++  // synchronously close the native window and destroy `this`. Callers that
++  // access the AppWindow after these calls must check liveness via
++  // GetWeakPtr().
+   void Fullscreen();
+   void Maximize();
+   void Minimize();
+   void Restore();
+ 
+   // Transitions to OS fullscreen. See FULLSCREEN_TYPE_OS for more details.
++  // Note: May synchronously close the native window and destroy `this`.
++  // Callers that access the AppWindow after this call must check liveness via
++  // GetWeakPtr().
+   void OSFullscreen();
+ 
+   // Transitions to forced fullscreen. See FULLSCREEN_TYPE_FORCED for more
+   // details.
++  // Note: May synchronously close the native window and destroy `this`.
++  // Callers that access the AppWindow after this call must check liveness via
++  // GetWeakPtr().
+   void ForcedFullscreen();
+ 
+   // Set the minimum and maximum size of the content bounds.
+@@ -401,6 +418,10 @@
+ 
+   bool DidFinishFirstNavigation() { return did_finish_first_navigation_; }
+ 
++  base::WeakPtr<AppWindow> GetWeakPtr() {
++    return weak_ptr_factory_.GetWeakPtr();
++  }
++
+  protected:
+   ~AppWindow() override;
+ 
+@@ -497,6 +518,9 @@
+   CreateParams LoadDefaults(CreateParams params) const;
+ 
+   // Set the fullscreen state in the native app window.
++  // Note: May synchronously close the native window and destroy `this`.
++  // Callers that access `this` after this call must check liveness via
++  // `weak_ptr_factory_`.
+   void SetNativeWindowFullscreen();
+ 
+   // Returns true if there is any overlap between the window and the taskbar

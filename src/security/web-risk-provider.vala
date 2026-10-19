@@ -23,11 +23,11 @@ namespace MajorisBrowser {
         private ThreatServiceState health=ThreatServiceState.NOT_CONFIGURED;
         private uint health_timer;
         public override ThreatServiceState state {get{return health;}}
-        private void set_health(ThreatServiceState value){if(health_timer!=0){Source.remove(health_timer);health_timer=0;}if(health!=value){health=value;notify_property("state");}if(value==ThreatServiceState.ACTIVE)health_timer=Timeout.add_seconds(60,()=>{health_timer=0;set_health(ThreatServiceState.UNAVAILABLE);return Source.REMOVE;});}
+        private void set_health(ThreatServiceState value){if(health_timer!=0){Source.remove(health_timer);health_timer=0;}if(health!=value){health=value;notify_property("state");}if(value==ThreatServiceState.ACTIVE)health_timer=Timeout.add_seconds(60,()=>{health_timer=0;set_health(ThreatServiceState.TEMPORARILY_UNAVAILABLE);return Source.REMOVE;});}
         public override void report_timeout(){if(enabled)set_health(ThreatServiceState.TEMPORARILY_UNAVAILABLE);}
         private ThreatResult failed(ThreatServiceState value){set_health(value);return new ThreatResult(ThreatVerdict.CHECK_FAILED);}
         public override bool configured {get{return enabled;}}
-        public WebRiskProvider(bool consent,ThreatProviderSecret? secret=null){enabled=consent;health=consent?ThreatServiceState.UNAVAILABLE:ThreatServiceState.NOT_CONFIGURED;this.secret=secret??new ThreatProviderSecret();session.timeout=3;session.user_agent="Majoris-Browser-WebRisk/1";}
+        public WebRiskProvider(bool consent,ThreatProviderSecret? secret=null){enabled=consent;health=consent?ThreatServiceState.UNAVAILABLE:ThreatServiceState.DISABLED;this.secret=secret??new ThreatProviderSecret();session.timeout=3;session.user_agent="Majoris-Browser-WebRisk/1";}
         public static void validate_managed_endpoint(string endpoint) throws Error {var uri=UrlResolver.web_uri(endpoint);if(uri.get_scheme()!="https" || uri.get_query()!=null || uri.get_fragment()!=null)throw new IOError.INVALID_ARGUMENT("Managed service requires an HTTPS endpoint without credentials, query or fragment");}
         public static bool consent_matches(bool consent,bool managed,string endpoint,string target){return consent && (managed?endpoint!="" && target==endpoint:target=="" || target=="google-web-risk");}
         public WebRiskProvider.managed_service(bool consent,string endpoint,ThreatProviderSecret? secret=null) throws Error {
@@ -65,7 +65,7 @@ namespace MajorisBrowser {
             next_request=slot+1000000;
             if(slot>now)yield wait_slot((uint)((slot-now+999)/1000),cancel);
             if(get_monotonic_time()<backoff_until)return failed(ThreatServiceState.TEMPORARILY_UNAVAILABLE);
-            string? key;try{key=yield secret.load(cancel);}catch(Error e){if(!cancel.is_cancelled())set_health(ThreatServiceState.UNAVAILABLE);throw e;}
+            string? key;try{key=yield secret.load(cancel);}catch(Error e){if(!cancel.is_cancelled())set_health(ThreatServiceState.TEMPORARILY_UNAVAILABLE);throw e;}
             if(key==null)return failed(ThreatServiceState.UNAVAILABLE);
             if(key=="" || key.length>512 || key.contains("\n") || key.contains("\r")){Secret.password_wipe(key);return failed(ThreatServiceState.SERVICE_ERROR);}
             var message=new Soup.Message("GET",endpoint+"?threatTypes=MALWARE&threatTypes=SOCIAL_ENGINEERING&threatTypes=UNWANTED_SOFTWARE&uri="+Uri.escape_string(target,null,false));

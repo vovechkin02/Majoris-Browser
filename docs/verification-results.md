@@ -1,3 +1,120 @@
+> **Current release-hardening record (0.1.0-8):** [release-hardening.md](release-hardening.md). Reviewed source: `27611aa41c806398fb0560aded3853a2a9ba53ec`. The security candidate retains four Majoris patches and adds twelve patches covering thirteen upstream maintenance/security commits. The candidate build, clean 30/30, Debian 30/30 and extracted-runtime verification passed locally. Production, redistribution and native-desktop approval remain pending. Earlier dated completion claims below are historical and do not qualify this candidate.
+
+## Sixteen-patch candidate build and direct security regressions
+
+The complete candidate linked successfully with CFI/ThinLTO: final resumed
+Ninja run **3275 steps, zero failures** (`security-candidate-16-build.log` and
+native build-7977-release.log). SDK preparation succeeded with actual Clang,
+sysroot/wrapper provenance and **232** runtime/resource/notice hashes.
+
+- libcef.so SHA-256: `d098dd129d1cbfe0b1fb0f7e4b86cfb6b52ccccf8965557591beb9c188174388`
+- Minimal archive SHA-256: `fba0c1a1ba992995cc2bb66a4d38856866fdcaf586fbc8ffc5969e93179692ba`
+- Actual SDK/provenance mirror: `build-engine-reference/security-candidate-runtime.json`.
+
+The pinned d8 runner built in ten steps. All three upstream V8
+`regress-569659194-{1,2,3}.js` cases passed with the mjsunit harness and
+`--allow-natives-syntax` in the isolated test runner only. No Browser flag was
+added. `security-v8-regressions.log` records runner/input hashes and each result.
+The refreshed official-source audit matches the runtime library/header and CEF
+branch pin; the reviewed Chromium branch delta has **no uncovered commits**.
+The base remains .169 with thirteen explicitly recorded upstream commits in
+twelve additional patches, alongside four original Majoris patches. No official
+.170 build is claimed.
+
+The regenerated licensing inventory matches actual source diffs, separate V8
+HEAD and extension source bytes. Selected FFmpeg flags: H264_DECODER=1,
+AAC_DECODER=1, GPL=0, NONFREE=0, LIBX264=0. These are technical facts, not
+redistribution/patent approval.
+
+The final clean application run passed **30/30**, with no skips/timeouts and 30
+unique OK records in `build-engine-reference/candidate-clean-test-logs/`.
+The Debian build also passed **30/30**; its retained records are in
+`build-packages-hardening-8/test-logs/`. Package verification passed archive
+ownership, sandbox mode 4755, all 232 installed runtime/resource/notice hashes,
+installed search paths and extracted GTK/CEF smoke (`hardening-candidate-deb.log`).
+The package buildinfo records Debian amd64, GCC 14.2 and libc6
+2.41-12+deb13u4. Native Majoris apt install/upgrade/removal remains unverified.
+Actual compiled GN support is `ozone_platform_wayland=true`; this is not a
+native Wayland/compositor test.
+
+Development artifacts:
+
+| Artifact | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `build-packages-hardening-8/majoris-browser_0.1.0-8_amd64.deb` | 264025692 | `217cb436b1b2ede520e7500a55c74d204aaf60686042bf83a73afc8b1452636c` |
+| `build-packages-hardening-8/majoris-browser-dbgsym_0.1.0-8_amd64.deb` | 3251020 | `62e875c49cdbf5dfdeefba82e5a00d2205ccc546ce5232f9e850459f2f3427bb` |
+
+The `.buildinfo` and `.changes` are retained alongside these artifacts. They
+are unsigned development outputs. `engine/releases/majoris-0.1.0-8-development.json`
+is a separate unapproved review record; all security/runtime/redistribution/
+production approval fields remain false. The as-built SDK provenance is
+immutable. Source/build/runtime success does not grant redistribution or release
+approval. The previous working SDK is separately preserved at
+`/home/administrator/majoris-engine-m152-codecs/sdk-before-hardening-0.1.0-8`.
+
+The current working-tree source identity is
+`591169faaa20d2a2dc887d1128fc805d546c3062ad4895b271a935a21ddf9947`.
+The review record binds it and discloses two final documentation-only changes
+under engine/ after the clean snapshot. Runtime/build code and root Meson, licence
+and checkout inputs match the verified snapshot. Release gates reject the real
+unapproved record for both RC and production, reject development opt-in in
+production, and reject RC packaging without a record (`final-release-gates.log`).
+`build-packages-hardening-8/SHA256SUMS` and RELEASE-BLOCKED.txt accompany the
+development artifacts. No approval was inferred from passing checks.
+
+The following source-hardening attempts are retained as history and comparison
+evidence; they do not supersede the final candidate results above.
+
+## Earlier source-hardening checks (0.1.0-8, retained history)
+
+Source reviewed: `27611aa41c806398fb0560aded3853a2a9ba53ec` plus the working
+changes documented in release-hardening.md. At this earlier stage candidate
+compilation/qualification remained pending; the final candidate evidence is
+recorded above. No candidate binary pass was claimed from source-only checks.
+
+The source-hardening Debian build against the preserved earlier codec SDK passed
+**30/30** required groups. `build-packages-hardening-source-8/test-logs/` preserves
+its full Meson evidence; `build-engine-reference/hardening-source-package.log`
+contains the build output. Archive and extracted GTK/CEF verification also pass
+(`hardening-source-deb.log`). This package contains the earlier .169 runtime,
+not the final maintenance candidate, and is not the production release artifact.
+
+The earlier in-tree 30-group attempt recorded 29 passes and one new malformed-URL
+test error: Python's HTTP client rejected the invalid URL before sending it.
+The test now sends that case over a raw socket; the backend's five cases and
+the real Chromium monitor geometry check pass (2/2 focused groups). The subsequent
+Debian suite passed all 30 groups. Failures are retained, not erased or counted
+as successful runs. Disposable real clamd 1.4.3 clean/harmless-signature scanning
+passed; no host service was installed. Release tests reject resource mixing,
+unrecorded resources, changed evidence, library tampering and production bypass.
+
+The first final standard-SDK run reached 29/30: AX assertions passed, but the
+harness terminated its parent process before Chromium finished profile writes,
+causing temporary-directory removal to fail. The harness now requests a graceful
+surface close and waits for CEF shutdown before cleanup; failure cleanup uses
+an isolated process group. The focused custom AX test passes. Subsequent standard
+serial results after the readiness correction are recorded below. No accessibility assertion was removed.
+
+A subsequent standard-SDK run exposed a separate context-menu fixture race:
+Cut and immediate Runtime.evaluate travel asynchronously. The fixture now
+waits up to two seconds for the actual input value to become empty, retaining
+the same empty-value assertion. The focused custom context-menu test passes.
+The full standard rerun's output is retained in `hardening-stock-corrected.log`.
+
+The initial serial AX run also caught an incomplete initial tree: frame buttons
+arrived before editable descendants. The harness now waits for every required
+name/role before asserting properties. Five repeated standard AX runs passed;
+the subsequent serial full run passed **30/30**, with 30 unique OK records in
+`build-engine-reference/standard-final-test-logs/` and stdout in
+`hardening-stock-verified.log`. Scanner capability parsing was then tightened to
+require the exact INSTREAM token, with unsupported-command and GTK fixtures
+passing 2/2. Disposable real clamd 1.4.3 health/clean/harmless-signature checks
+also pass (`scanner-capability-real-clamd.log`). Candidate/package tests will
+exercise this final scanner change again. No failures were hidden or assertions
+removed to obtain these results.
+
+## Historical verification records
+
 # Verification results — 19 October 2026
 
 ## Custom engine pass — revision 0.1.0-7, local verification complete

@@ -1,3 +1,34 @@
+> **Current release-hardening record (0.1.0-8):** [../docs/release-hardening.md](../docs/release-hardening.md). Reviewed source: `27611aa41c806398fb0560aded3853a2a9ba53ec`. The security candidate retains four Majoris patches and adds twelve patches covering thirteen upstream maintenance/security commits. The candidate build, clean 30/30, Debian 30/30 and extracted-runtime verification passed locally. Production, redistribution and native-desktop approval remain pending. Earlier dated completion claims below are historical and do not qualify this candidate.
+
+## Current security candidate workflow
+
+Use `--manifest engine/manifests/m152-security-candidate.json` for **every** stage
+(acquire, patch, build, sdk), with the same `--development-codecs` and
+`--build-jobs 16` configuration. Use a new native, disk-backed Linux workspace
+for a different branch or incompatible patch set. The candidate retains the
+four original Majoris patches and adds twelve patches covering thirteen upstream
+maintenance/security commits, including the separately pinned V8 dependency.
+It is Chromium .169 plus recorded backports, not an official .170 release.
+
+The driver validates every selected patch hash and refuses to silently drop
+applied patches from the workspace receipt. Workflow adaptations use immutable
+content-addressed filenames. If explicitly reversing a patch set, review and
+verify the resulting source before discarding its receipt; normal updates use
+a fresh workspace. Never reuse a success receipt after changing source/config.
+
+After building and preparing the SDK, run the existing online audit, the exact
+patch applicability/corruption tests with `--manifest`, the clean 30-group app
+suite with real media fixtures, and the Debian build/extracted-package verifier.
+Regenerate `license-inventory.py` against the matching source and SDK. Create a
+separate draft through `release-record.py`; compilation never grants approval.
+Read [release hardening](../docs/release-hardening.md) for channel gates and
+[desktop qualification](../docs/target-desktop-qualification.md) for target tests.
+Recheck advisories and branch deltas at release time, with a dated authorised
+security review. New applicable uncovered fixes block distribution. Production
+installations do not download or promote unqualified engine revisions.
+
+## Historical baseline workflow
+
 # Majoris custom CEF runtime
 
 This is a source-build integration, separate from the standard SDK bootstrap.

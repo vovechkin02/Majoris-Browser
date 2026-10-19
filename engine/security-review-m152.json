@@ -1,0 +1,22 @@
+{
+  "reviewed_at": "2026-10-19",
+  "extended_advisory": "https://chromereleases.googleblog.com/2026/10/extended-stable-update-for-desktop_01598036246.html",
+  "linux_stable_advisory": "https://chromereleases.googleblog.com/2026/10/stable-channel-update-for-desktop_01886704284.html",
+  "linux_additional_fixes": [
+    "CVE-2026-110914",
+    "CVE-2026-110915",
+    "CVE-2026-110917",
+    "CVE-2026-110920",
+    "CVE-2026-110916"
+  ],
+  "approval_granted": false,
+  "conservative_inclusions": [
+    {
+      "cve": "CVE-2026-110916",
+      "component": "chrome/browser/new_tab_page/modules/v2/calendar/google_calendar_page_handler.cc",
+      "reason": "Conservatively backported: Majoris does not expose the normal Calendar UI, but the browser context permits internal schemes; no component-exclusion assumption is required",
+      "upstream_review": "https://chromium-review.googlesource.com/c/chromium/src/+/8446599",
+      "commit": "6911bb69b1cf8cf0a3c3dd6fa27c231a326af72d"
+    }
+  ]
+}

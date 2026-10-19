@@ -1,10 +1,12 @@
 #!/usr/bin/make -f
+MAJORIS_RELEASE_CHANNEL ?= development
 %:
 	dh $@ --buildsystem=meson
 override_dh_auto_configure:
 	test -n "$(CEF_ROOT)"
+	test -z "$(filter nocheck,$(DEB_BUILD_OPTIONS))"
 	python3 engine/scripts/verify-sdk.py --sdk "$(CEF_ROOT)" --for-package
-	dh_auto_configure -- -Dcef_root=$(CEF_ROOT)
+	dh_auto_configure -- -Dcef_root=$(CEF_ROOT) -Drelease_channel=$(MAJORIS_RELEASE_CHANNEL) -Drelease_record="$(MAJORIS_RELEASE_RECORD)"
 override_dh_fixperms:
 	dh_fixperms
 	chmod 4755 debian/majoris-browser/usr/lib/*/majoris-browser/cef/chrome-sandbox

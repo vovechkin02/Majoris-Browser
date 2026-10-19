@@ -1,3 +1,26 @@
+> **Current release-hardening record (0.1.0-8):** [../docs/release-hardening.md](../docs/release-hardening.md). Reviewed source: `27611aa41c806398fb0560aded3853a2a9ba53ec`. The security candidate retains four Majoris patches and adds twelve patches covering thirteen upstream maintenance/security commits. The candidate build, clean 30/30, Debian 30/30 and extracted-runtime verification passed locally. Production, redistribution and native-desktop approval remain pending. Earlier dated completion claims below are historical and do not qualify this candidate.
+
+## Current maintenance backports
+
+The candidate manifest retains the original four Majoris patches and records
+all additional upstream origins and exact patch digests. Seven patches cover
+the reviewed M152 branch delta; five more cover thirteen upstream commits in
+total after the separate Linux Stable advisory review. Worker CSP fixes combine
+two dependent upstream changes with include/test-tail context adaptation. The
+shader fix adds M152's absent uint64 writer overload with upstream split-word
+serialization. SVG, V8 and Calendar URL-validation patches are exact upstream patches. Original tests
+and copyright notices are retained. V8 is a nested Git checkout: its pinned
+HEAD and actual source diff must appear separately in provenance. Selecting
+only Chromium's HEAD does not bind modified V8 source.
+
+Run the existing `tests/test_engine.py --manifest manifests/m152-security-candidate.json`
+from engine/ with the actual workspace. All sixteen patches pass exact pristine
+application/reversal and corruption rejection. No fuzzy application is used in
+the compiling engine checkout; adaptations were reviewed in a disposable source
+snapshot and regenerated as exact M152 patches. `.cc` and `.patch` files use
+explicit LF checkout rules so Windows line-ending conversion cannot invalidate
+patch digests or untracked extension-source comparisons.
+
 # Updating the engine patch set
 
 1. Select a supported CEF branch and a complete Chromium maintenance revision.

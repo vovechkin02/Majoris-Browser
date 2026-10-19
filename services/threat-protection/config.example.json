@@ -1,0 +1,7 @@
+{
+  "provider_use_authorised": false,
+  "provider_key_file": "/etc/majoris-threat/provider-key",
+  "client_token_sha256": [],
+  "requests_per_minute": 30,
+  "global_requests_per_minute": 600
+}

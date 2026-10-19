@@ -1,3 +1,34 @@
+> **Current release-hardening record (0.1.0-8):** [release-hardening.md](release-hardening.md). Reviewed source: `27611aa41c806398fb0560aded3853a2a9ba53ec`. The security candidate retains four Majoris patches and adds twelve patches covering thirteen upstream maintenance/security commits. The candidate build, clean 30/30, Debian 30/30 and extracted-runtime verification passed locally. Production, redistribution and native-desktop approval remain pending. Earlier dated completion claims below are historical and do not qualify this candidate.
+
+## Current optional ClamAV deployment
+
+Browser never installs or starts system antivirus services. Majoris OS may
+optionally provide Debian `clamav-daemon` and `clamav-freshclam`, enable signature
+updates, and provision an access-controlled Unix socket. Start from
+`packaging/clamav/majoris-clamd.conf.example`; use a dedicated scanner group,
+mode 0660 and explicit authorised user membership. Never expose an unauthenticated
+clamd TCP listener. Configure the GSettings `download-scanner-socket` path to match the OS
+service and restart Browser after configuration changes. Check the exact schema
+key names before provisioning; the deployed configuration is operator-managed.
+
+Keep Browser's default 64 MiB `download-scanner-max-mib` within StreamMaxLength,
+MaxFileSize and total archive/time/memory limits. Raise it only after capacity
+review (supported Browser range 1–1024 MiB). `HeuristicAlerts yes` and
+`AlertExceedsMax yes` are required to make daemon resource-limit skips explicit;
+INSTREAM cannot discover all daemon limits. Such results are incomplete scans.
+Maintain freshclam service health and database permissions, monitor failed
+updates and disk capacity, and recover a stopped daemon before retrying Scan.
+A reported database date older than seven days warns; an absent/unparseable date
+is unknown, never proof of current protection. Live capability probes and the
+Downloads Check Scanner action recover availability without deleting history.
+
+The separate managed-service implementation and operator contract are in
+[services/threat-protection](../services/threat-protection/README.md). Its tests
+use local fixtures; no live endpoint or entitlement is claimed. The older
+statement below that no backend component exists is historical.
+
+## Historical deployment and security records
+
 # Engine security maintenance
 
 ## Current deployment contract and optional local scanner

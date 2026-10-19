@@ -1,6 +1,11 @@
 using MajorisBrowser;
+class UnavailableProviderSecret : MajorisBrowser.ThreatProviderSecret {
+    public override async string? load(Cancellable cancel) throws Error {throw new IOError.FAILED("Fixture keyring unavailable");}
+}
 async void verify(MainLoop loop,string endpoint,string certificate,string untrusted_endpoint){
     try{
+        var disabled=new WebRiskProvider(false);assert(disabled.state==ThreatServiceState.DISABLED);
+        var locked=new WebRiskProvider(true,new UnavailableProviderSecret());assert((yield new ThreatProtectionService(locked).check("browser","https://example.test/keyring-unavailable")).verdict==ThreatVerdict.CHECK_FAILED);assert(locked.state==ThreatServiceState.TEMPORARILY_UNAVAILABLE);
         var secret=new ThreatProviderSecret();yield secret.save("fixture-key-not-a-real-credential");
         string? saved=yield secret.load(new Cancellable());assert(saved=="fixture-key-not-a-real-credential");Secret.password_wipe(saved);
         var provider=new WebRiskProvider.fixture(secret,endpoint,certificate);

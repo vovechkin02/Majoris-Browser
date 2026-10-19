@@ -4,6 +4,8 @@
 *.vala text eol=lf
 *.vapi text eol=lf
 *.cpp text eol=lf
+*.cc text eol=lf
+*.patch text eol=lf
 *.h text eol=lf
 meson.build text eol=lf
 packaging/debian/rules text eol=lf

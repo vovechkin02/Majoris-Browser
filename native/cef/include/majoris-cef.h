@@ -4,6 +4,8 @@ G_BEGIN_DECLS
 #define MC_TYPE_VIEW (mc_view_get_type())
 G_DECLARE_FINAL_TYPE(McView, mc_view, MC, VIEW, GObject)
 gboolean mc_runtime_initialize(const char *root, const char *helper, const char *resources, GError **error);
+gboolean mc_runtime_set_display_backend(const char *backend);
+void mc_view_set_screen(McView *self,int x,int y,int width,int height);
 void mc_runtime_shutdown(void);
 const char *mc_runtime_version(void);
 gboolean mc_runtime_has_native_pip(void);

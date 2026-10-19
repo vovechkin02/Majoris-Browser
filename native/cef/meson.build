@@ -1,4 +1,8 @@
 cef_root = get_option('cef_root')
+if get_option('release_channel') != 'development'
+  run_command('env','MAJORIS_RELEASE_CHANNEL='+get_option('release_channel'),'MAJORIS_RELEASE_RECORD='+get_option('release_record'),'python3',meson.project_source_root()/'engine/scripts/verify-sdk.py','--sdk',cef_root,'--for-package',check:true)
+  install_data(get_option('release_record'),install_dir:get_option('libdir')/'majoris-browser/cef',rename:'majoris-release.json')
+endif
 if cef_root == ''
   error('CEF SDK required: run scripts/bootstrap-cef.py explicitly, then pass -Dcef_root=/absolute/path; use -Ddomain_only=true for headless domain tests')
 endif

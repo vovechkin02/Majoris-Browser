@@ -7,6 +7,7 @@ namespace MajorisBrowser { public class Application : Object {
 class AssessmentFixture : DownloadSecurityProvider {
     public bool hang;
     public override bool configured {get{return true;}}
+    public override async void probe(){state=ScannerState.AVAILABLE;status_detail="Deterministic operational scanner fixture";}
     public override async FileAssessment assess(string path,Cancellable cancel) throws Error {
         if(hang){SourceFunc resume=assess.callback;ulong handler=cancel.cancelled.connect(()=>Idle.add((owned)resume));yield;cancel.disconnect(handler);cancel.set_error_if_cancelled();}
         return new FileAssessment(DownloadAssessment.MALICIOUS,"Harmless scanner fixture verdict");
@@ -19,6 +20,10 @@ async void verify_assessment(MajorisBrowser.Application owner){
     service.scan.begin(record,"",(object,response)=>{service.scan.end(response);finished=true;});assert(record.assessment==DownloadAssessment.PENDING && !record.may_open);service.remove(record,"");
     while(!finished){SourceFunc resume=verify_assessment.callback;Idle.add((owned)resume);yield;}
     assert(!service.records.contains(record));
+    var pending=new DownloadRecord();pending.status="complete";service.records.add(pending);finished=false;
+    service.scan.begin(pending,"",(object,response)=>{service.scan.end(response);finished=true;});assert(pending.assessment==DownloadAssessment.PENDING);service.stop();
+    while(!finished){SourceFunc resume=verify_assessment.callback;Idle.add((owned)resume);yield;}
+    assert(service.records.contains(pending) && pending.assessment==DownloadAssessment.PENDING);
     stdout.printf("Production download service: pending/open guard, threat block, cancellation on removal and no resurrection: PASS\n");
 }
 int main(string[] args){

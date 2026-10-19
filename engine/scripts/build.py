@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Pinned custom CEF source build; never invoked implicitly by Meson."""
-import argparse,ast,datetime,hashlib,json,os,pathlib,shutil,subprocess,sys,urllib.request
+import argparse,ast,datetime,hashlib,json,os,pathlib,runpy,shutil,subprocess,sys,urllib.request
 ENGINE=pathlib.Path(__file__).resolve().parents[1]
 def run(command,cwd,env=None,timeout=None):
     print('+',subprocess.list2cmdline([str(x) for x in command]),flush=True)
@@ -27,6 +27,9 @@ def main():
     parser.add_argument('--development-codecs',action='store_true',help='Separate development-only proprietary codec configuration; not distribution approval')
     parser.add_argument('--build-jobs',type=int,default=8,help='Explicit local compile jobs; recorded in workflow provenance')
     args=parser.parse_args();manifest=json.loads(args.manifest.read_text());workspace=args.workspace.resolve()
+    for patch in manifest['patches']:
+        path=(ENGINE/patch['path']).resolve()
+        if not path.is_relative_to(ENGINE) or digest(path)!=patch['sha256']:raise SystemExit('Selected patch checksum/path mismatch: '+patch['path'])
     if not 1<=args.build_jobs<=256:raise SystemExit('--build-jobs must be between 1 and 256')
     if sys.platform!='linux' or str(workspace).startswith('/mnt/') or ' ' in str(workspace):raise SystemExit('Use an explicit native Linux workspace without spaces')
     workspace.mkdir(parents=True,exist_ok=True)
@@ -43,6 +46,8 @@ def main():
     environment['GN_DEFINES']=' '.join(line.strip() for line in gn.splitlines() if line.strip() and not line.lstrip().startswith('#'))
     depot=workspace/'depot_tools';tool=workspace/'automate-git.py'
     source=workspace/'chromium/src';cef=source/'cef'
+    roots={'cef':cef,'chromium':source}
+    if 'v8_commit' in manifest:roots['v8']=source/'v8'
     if args.stage=='acquire':
         if not tool.exists():
             with urllib.request.urlopen('https://raw.githubusercontent.com/chromiumembedded/cef/'+manifest['cef_commit']+'/tools/automate/automate-git.py',timeout=60) as response:tool.write_bytes(response.read())
@@ -65,7 +70,9 @@ def main():
     siso_line='          "\'siso_version\': \'latest\', "+\n'
     if siso_line not in adapted:raise SystemExit('Official Siso override context changed')
     adapted=adapted.replace(siso_line,'')
-    workflow=workspace/'majoris-automate-git.py';workflow.write_text(adapted)
+    workflow=workspace/('majoris-automate-git-'+hashlib.sha256(adapted.encode()).hexdigest()+'.py')
+    if workflow.exists() and workflow.read_text()!=adapted:raise SystemExit('Immutable workflow content mismatch')
+    if not workflow.exists():workflow.write_text(adapted)
     environment['PATH']=str(depot)+os.pathsep+environment['PATH']
     command=[sys.executable,str(workflow),'--download-dir='+str(workspace),'--depot-tools-dir='+str(depot),'--branch='+manifest['cef_branch'],'--checkout='+manifest['cef_commit'],'--chromium-checkout=refs/tags/'+manifest['chromium_version'],'--no-depot-tools-update','--no-debug-build','--x64-build']
     if args.stage=='acquire':
@@ -88,10 +95,14 @@ def main():
     else:
         if head(source)!=manifest['chromium_commit'] or head(cef)!=manifest['cef_commit']:raise SystemExit('Source revisions do not match the selected manifest')
         if not (workspace/'majoris-acquired.json').exists():raise SystemExit('Source dependencies were not fully acquired; run acquire')
+        if any(head(root)!=manifest[name+'_commit'] for name,root in roots.items()):raise SystemExit('Selected dependency source revision mismatch')
         if args.stage=='patch':
+            receipt=workspace/'majoris-patches.json'
+            if receipt.exists() and any(entry not in manifest['patches'] for entry in json.loads(receipt.read_text())):
+                raise SystemExit('Workspace contains a different patch set. Use a fresh workspace, or explicitly reverse and review the previous patches before removing their receipt. Patches are never silently omitted from provenance.')
             receipts=[]
             for patch in manifest['patches']:
-                path=ENGINE/patch['path'];target=cef if patch['repository']=='cef' else source
+                path=ENGINE/patch['path'];target=roots[patch['repository']]
                 if digest(path)!=patch['sha256']:raise SystemExit('Patch checksum mismatch: '+str(path))
                 forward=subprocess.run(['git','apply','--check',str(path)],cwd=target,capture_output=True)
                 if forward.returncode==0:run(['git','apply',str(path)],target)
@@ -104,7 +115,7 @@ def main():
             verify_extension_sources(cef)
             run(command+['--no-update','--force-build','--build-target=libcef','--minimal-distrib-only','--no-distrib-symbols','--no-distrib-docs','--build-log-file'],workspace,environment)
             diffs={}
-            for name,root in [('cef',cef),('chromium',source)]:
+            for name,root in roots.items():
                 path=workspace/('majoris-'+name+'-source.diff')
                 with path.open('wb') as output:subprocess.run(['git','diff','--binary','HEAD'],cwd=root,stdout=output,check=True)
                 diffs[name]=digest(path)
@@ -115,7 +126,7 @@ def main():
             if not (workspace/'majoris-build.json').exists():raise SystemExit('No successful build receipt')
             receipt=json.loads((workspace/'majoris-build.json').read_text())
             if any(receipt.get(key)!=value for key,value in expected.items()):raise SystemExit('No successful build receipt for this exact source, patch set and configuration')
-            for name,root in [('cef',cef),('chromium',source)]:
+            for name,root in roots.items():
                 actual=hashlib.sha256(subprocess.check_output(['git','diff','--binary','HEAD'],cwd=root)).hexdigest()
                 if actual!=receipt['source_diffs'][name]:raise SystemExit('Source changed after compilation: '+name)
             candidates=sorted((cef/'binary_distrib').glob('cef_binary_*linux64_minimal.tar.bz2'))
@@ -125,7 +136,14 @@ def main():
             sdk=workspace/'sdk/distribution'/archive.name.removesuffix('.tar.bz2')
             provenance['source_diffs']=receipt['source_diffs']
             provenance['extension_sources']=extension_sources
+            clang=source/'third_party/llvm-build/Release+Asserts/bin/clang'
+            provenance['toolchain']={'depot_tools_commit':manifest['depot_tools_commit'],
+                'clang_version':subprocess.check_output([str(clang),'--version'],text=True).strip(),
+                'clang_sha256':digest(clang),
+                'sysroots_manifest_sha256':digest(source/'build/linux/sysroot_scripts/sysroots.json'),
+                'wrapper_compiler':subprocess.check_output(['c++','--version'],text=True).splitlines()[0]}
             provenance['libcef_sha256']=digest(sdk/'Release/libcef.so')
+            provenance['runtime_files']=runpy.run_path(str(ENGINE/'scripts/runtime-files.py'))['inventory'](sdk)
             shutil.copy2(ENGINE/'api/majoris_runtime.h',sdk/'include/majoris_runtime.h')
             (sdk/'majoris-runtime.json').write_text(json.dumps(provenance,indent=2)+'\n')
             (workspace/'majoris-runtime.json').write_text(json.dumps(provenance,indent=2)+'\n');print(json.dumps(provenance,indent=2))

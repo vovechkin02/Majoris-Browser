@@ -4,12 +4,14 @@ namespace MajorisBrowser {
         private MajorisCef.View? engine;
         private string session;
         private Gtk.ListBox list=new Gtk.ListBox();
+        private Adw.ActionRow scanner_status=new Adw.ActionRow();
         public DownloadsDialog(Application app,MajorisCef.View? engine,string session=""){
             this.app=app;this.engine=engine;this.session=session;title=_("Downloads");content_width=700;content_height=500;
-            var layout=new Adw.ToolbarView();var header=new Adw.HeaderBar();var clear=new Gtk.Button.with_label(_("Clear Completed"));header.pack_start(clear);clear.clicked.connect(()=>app.downloads.clear_completed(session));layout.add_top_bar(header);var scroll=new Gtk.ScrolledWindow();scroll.child=list;layout.content=scroll;child=layout;
-            ulong changed=app.downloads.changed.connect(refresh);closed.connect(()=>app.downloads.disconnect(changed));refresh();
+            var layout=new Adw.ToolbarView();var header=new Adw.HeaderBar();var clear=new Gtk.Button.with_label(_("Clear Completed"));header.pack_start(clear);clear.clicked.connect(()=>app.downloads.clear_completed(session));layout.add_top_bar(header);var scroll=new Gtk.ScrolledWindow();scroll.child=list;scroll.vexpand=true;var content=new Gtk.Box(Gtk.Orientation.VERTICAL,0);scanner_status.use_markup=false;scanner_status.title=_("Download Scanner");add_button(scanner_status,_("Check Scanner"),()=>app.downloads.refresh_scanner.begin());content.append(scanner_status);content.append(scroll);layout.content=content;child=layout;
+            ulong changed=app.downloads.changed.connect(refresh);uint health_timer=Timeout.add_seconds(15,()=>{app.downloads.refresh_scanner.begin();return Source.CONTINUE;});closed.connect(()=>{Source.remove(health_timer);app.downloads.disconnect(changed);});app.downloads.refresh_scanner.begin();refresh();
         }
         private void refresh(){
+            scanner_status.subtitle=app.downloads.scanner_label+" · "+app.downloads.scanner_detail;
             while(list.get_first_child()!=null)list.remove(list.get_first_child());
             foreach(var record in app.downloads.records){
                 if(!app.downloads.owns(record,session))continue;
@@ -20,7 +22,7 @@ namespace MajorisBrowser {
                 if(record.assessment_detail!="")row.subtitle+=" · "+record.assessment_detail;
                 if(record.status=="complete"){
                     if(record.assessment==DownloadAssessment.PENDING)add_button(row,_("Cancel Scan"),()=>app.downloads.cancel_scan(record,session));
-                    else if(record.assessment!=DownloadAssessment.MALICIOUS && record.assessment!=DownloadAssessment.POLICY_BLOCKED)add_button(row,_("Scan"),()=>app.downloads.scan.begin(record,session));
+                    else if(app.downloads.scanner_available && record.assessment!=DownloadAssessment.MALICIOUS && record.assessment!=DownloadAssessment.POLICY_BLOCKED)add_button(row,_("Scan"),()=>app.downloads.scan.begin(record,session));
                     add_button(row,_("Open"),()=>open_record.begin(record)).sensitive=record.may_open;add_button(row,_("Show in Files"),()=>{if(app.downloads.owns(record,session))launch.begin(record.destination,true);});
                 }else if(record.control!=null && (record.status=="active" || record.status=="paused")){
                     add_button(row,record.status=="paused"?_("Resume"):_("Pause"),()=>app.downloads.command(record,record.status=="paused"?"resume":"pause",session));add_button(row,_("Cancel"),()=>app.downloads.command(record,"cancel",session));

@@ -1,3 +1,15 @@
+majoris-browser (0.1.0-8) unstable; urgency=medium
+
+  * Detect live scanner availability and signature age; gate download Scan UI.
+  * Add bounded configurable scan limits and preserve pending/open protection.
+  * Refuse profile downgrades and align CEF with the actual GTK display backend.
+  * Add managed threat-service deployment component and explicit release gates.
+  * Backport reviewed Chromium/V8 fixes while retaining native engine features.
+  * Bind SDK resources/notices and release approvals to exact source/runtime.
+  * Refresh security delta, licensing inventory and target qualification records.
+
+ -- Majoris Developers <developers@majoris.org>  Mon, 19 Oct 2026 14:00:00 +1100
+
 majoris-browser (0.1.0-7) unstable; urgency=medium
 
   * Add pinned custom CEF/Chromium source acquisition, patches and provenance.

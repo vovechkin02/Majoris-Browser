@@ -1,12 +1,31 @@
+> **Current release-hardening record (0.1.0-8):** [docs/release-hardening.md](docs/release-hardening.md). Reviewed source: `27611aa41c806398fb0560aded3853a2a9ba53ec`. The security candidate retains four Majoris patches and adds twelve patches covering thirteen upstream maintenance/security commits. The candidate build, clean 30/30, Debian 30/30 and extracted-runtime verification passed locally. Production, redistribution and native-desktop approval remain pending. Earlier dated completion claims below are historical and do not qualify this candidate.
+
 # Majoris Browser
 
 Majoris now includes a pinned custom CEF/Chromium source-build pipeline, native codec development configuration, Chromium-backed PiP, validated AX action transport, native navigation-entry restoration and extended task metrics. The custom target is Chromium 152.0.7977.169 with CEF branch 7977; compilation and runtime qualification are recorded separately. See the [engine build guide](engine/README.md), [patch maintenance guide](engine/PATCH-MAINTENANCE.md) and [current implementation matrix](docs/implementation-status.md).
 
-The standard CEF SDK remains an explicit fallback. Custom features are detected from the loaded runtime, and unavailable functionality stays disabled. The required regression set now contains 27 groups, including native PiP and history. Optional local clamd scanning and opt-in Web Risk adapters remain available; no production signatures, threat-service account, Widevine CDM or codec redistribution approval is bundled. See [security configuration](docs/security-maintenance.md) and [codec qualification](docs/codec-runtime.md).
+The standard CEF SDK remains an explicit fallback. Custom features are detected from the loaded runtime, and unavailable functionality stays disabled. The required regression set contains 30 groups, including native PiP, history, scanner UI, managed-backend fixtures and release-policy checks. Optional local clamd scanning and opt-in Web Risk adapters remain available; no production signatures, threat-service account, Widevine CDM or codec redistribution approval is bundled. See [security configuration](docs/security-maintenance.md) and [codec qualification](docs/codec-runtime.md).
 
 GTK4/libadwaita browser and isolated web-application runtime, written primarily in Vala with a C++ CEF bridge. Application identity: `com.majoris.browser`; executable: `majoris-browser`.
 
 **Development implementation, not a release-complete daily-driver browser.** See [implementation status](docs/implementation-status.md) for unfinished requirements and verification limits. Passing the current tests does not establish completion of the supplied product specification.
+
+## Current hardening release (0.1.0-8)
+
+Scanner controls now follow live clamd health, with signature-age warnings,
+configurable bounded streams, cancellation and shutdown safety. The optional
+[operator backend](services/threat-protection/README.md) implements the existing
+managed Web Risk contract; it is separate from Browser and has not been deployed.
+Installed apps keep independent profiles, and newer-engine profiles refuse
+unsafe downgrade attempts without resetting user data.
+
+The security candidate retains native codecs, PiP, AX actions, history and task
+metrics while adding reviewed Chromium/V8 maintenance fixes. Its exact pins,
+patches, verification and external release blockers are in the
+[current release record](docs/release-hardening.md). The standard .167 SDK below
+is for compatibility/development testing and is not security-approved for release.
+Development, release-candidate and production packaging have explicit gates;
+passing tests never grants security, codec redistribution or production approval.
 
 ## Build on Debian 13
 

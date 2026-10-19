@@ -4,8 +4,10 @@ import argparse,hashlib,importlib.util,json,os,pathlib,shutil,subprocess,tempfil
 engine=pathlib.Path(__file__).resolve().parents[1]
 parser=argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--workspace',type=pathlib.Path,required=True)
-args=parser.parse_args();manifest=json.loads((engine/'manifests/m152.json').read_text())
+parser.add_argument('--manifest',type=pathlib.Path,default=engine/'manifests/m152.json')
+args=parser.parse_args();manifest=json.loads(args.manifest.read_text())
 roots={'cef':args.workspace/'chromium/src/cef','chromium':args.workspace/'chromium/src'}
+if 'v8_commit' in manifest:roots['v8']=args.workspace/'chromium/src/v8'
 spec=importlib.util.spec_from_file_location('majoris_build',engine/'scripts/build.py')
 driver=importlib.util.module_from_spec(spec);spec.loader.exec_module(driver)
 with tempfile.TemporaryDirectory(prefix='majoris-source-provenance-') as folder:

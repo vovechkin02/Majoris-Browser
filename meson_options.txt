@@ -1,2 +1,5 @@
 option('cef_root', type: 'string', value: '', description: 'Explicit prepared Linux64 CEF SDK, standard or pinned custom engine')
 option('domain_only', type: 'boolean', value: false, description: 'Build headless domain tests without CEF or GTK')
+
+option('release_channel',type:'combo',choices:['development','release-candidate','production'],value:'development',description:'Explicit artifact release channel; non-development requires a reviewed release record')
+option('release_record',type:'string',value:'',description:'External approval record bound to the exact application and runtime')

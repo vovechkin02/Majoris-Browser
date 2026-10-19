@@ -1,3 +1,20 @@
+> **Current release-hardening record (0.1.0-8):** [release-hardening.md](release-hardening.md). Reviewed source: `27611aa41c806398fb0560aded3853a2a9ba53ec`. The security candidate retains four Majoris patches and adds twelve patches covering thirteen upstream maintenance/security commits. The candidate build, clean 30/30, Debian 30/30 and extracted-runtime verification passed locally. Production, redistribution and native-desktop approval remain pending. Earlier dated completion claims below are historical and do not qualify this candidate.
+
+# Current implementation status — 0.1.0-8
+
+The authoritative [17-component classification matrix](release-hardening.md#current-readiness-matrix)
+separates implemented code, local verification, upstream limitations and external
+release gates. Current source adds scanner health/UI/limits, the optional managed
+backend, profile downgrade protection, Wayland backend/scale/scroll/monitor fixes,
+exact runtime/resource inventories and explicit release channels. Architecture
+and working native engine extensions are preserved. The security candidate now
+contains sixteen patches with separate V8 provenance. The candidate build/SDK, clean 30/30 and Debian
+30/30 pass, as do archive/inventory/extracted-runtime checks and three direct
+V8 regressions. The standard-SDK serial suite also passed 30/30.
+Target Wayland/dock/Orca/Sheets and actual system upgrades remain unverified.
+
+## Historical completion matrices
+
 # Completion matrix — 19 October 2026
 
 ## Custom engine qualification — revision 0.1.0-7

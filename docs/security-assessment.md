@@ -1,3 +1,50 @@
+> **Current release-hardening record (0.1.0-8):** [release-hardening.md](release-hardening.md). Reviewed source: `27611aa41c806398fb0560aded3853a2a9ba53ec`. The security candidate retains four Majoris patches and adds twelve patches covering thirteen upstream maintenance/security commits. The candidate build, clean 30/30, Debian 30/30 and extracted-runtime verification passed locally. Production, redistribution and native-desktop approval remain pending. Earlier dated completion claims below are historical and do not qualify this candidate.
+
+## Current candidate assessment (19 October 2026)
+
+The maintenance deltas, Linux advisory backports, applicability and exclusions are recorded in
+[release-hardening.md](release-hardening.md). All sixteen candidate patches pass
+pristine applicability, reversal and deliberate corruption rejection. Upstream
+commit metadata and patch checksums are in the candidate manifest. This is a
+dated engineering assessment, not formal security approval or a claim that all
+future/undisclosed vulnerabilities are resolved. Recheck upstream at release.
+
+The native command-line review retains sandboxing and does not add no-sandbox,
+disable-web-security or ignore-certificate-errors. Runtime fixtures inspect
+renderer command lines and `/proc` sandbox state, exercise denied invalid TLS,
+cross-origin/file restrictions, permissions, credential/native-bridge boundaries,
+private isolation and independent request contexts. The existing custom suite
+also exercises native AX actions, real media samples, history restoration and
+PiP lifecycle. The final candidate linked with CFI/ThinLTO, passed the clean 30-group and
+Debian 30-group suites, installed-byte/extracted-runtime checks, and three
+direct upstream V8 regressions. The fresh source audit found no uncovered
+commits in the reviewed branch delta and the CEF branch pin matches. See
+verification-results.md for exact hashes/logs. This is local engineering
+evidence; accountable security approval remains false, not inferred from tests.
+
+The new backend never fetches destination URLs: it contacts only the fixed
+provider over authenticated HTTPS, with bounded input/output, work capacity and
+quotas. URLs and authentication are excluded from application logs and exception
+tracebacks. Its health endpoint needs authentication and actual recent provider
+success; it cannot establish provider entitlement, physical operations or a
+service-level guarantee. TLS termination, client provisioning and operator
+privacy/terms approval remain required before any deployment.
+
+ClamAV's trusted local socket receives a bounded file stream, not a path to open.
+The Browser holds a no-follow regular-file descriptor and rechecks inode/device,
+size and nanosecond modification/change times before accepting a result. Resource
+limit responses are incomplete assessments. A clean scan means no known threat,
+not a safety guarantee; malicious/policy-blocked downloads cannot be opened via
+the dialog. Health checks and scans are cancelled during application shutdown.
+
+Profile downgrade checks execute under the exclusive profile lease before CEF
+initialisation. Future or malformed versions and symlink markers refuse access
+without reset. This is a safety guard, not a supported cross-version downgrade
+migration. Production and RC packaging bind explicit approval records to current
+source/runtime hashes; no approval is granted by tests or build success.
+
+## Historical source/runtime assessments
+
 # Custom engine security maintenance — 19 October 2026
 
 The new manifest selects the entire Chromium 152.0.7977.169 source tree,

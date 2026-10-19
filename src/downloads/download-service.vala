@@ -5,6 +5,13 @@ namespace MajorisBrowser {
         private Gee.HashSet<DownloadRecord> dirty=new Gee.HashSet<DownloadRecord>();
         private uint save_timer;
         private DownloadSecurityProvider scanner;
+        private bool stopping;
+        public bool scanner_available {get{return scanner.available;}}
+        public ScannerState scanner_state {get{return scanner.state;}}
+        public string scanner_label {owned get{switch(scanner.state){case ScannerState.NOT_CONFIGURED:return _("Not Configured");case ScannerState.CHECKING:return _("Checking Scanner");case ScannerState.NOT_INSTALLED:return _("Scanner Not Found");case ScannerState.INACTIVE:return _("Scanner Inactive");case ScannerState.AVAILABLE:return _("Scanner Available");case ScannerState.OUTDATED:return _("Signatures Outdated");default:return _("Scanner Unavailable");}}}
+        public string scanner_detail {owned get{return scanner.status_detail;}}
+        public async void refresh_scanner(){if(stopping)return;yield scanner.probe();if(!stopping)changed();}
+        public void stop(){stopping=true;scanner.stop();foreach(var cancel in scans.values)cancel.cancel();flush();}
         private Gee.HashMap<DownloadRecord,Cancellable> scans=new Gee.HashMap<DownloadRecord,Cancellable>();
         private Gee.HashMap<MajorisCef.View,string> sessions=new Gee.HashMap<MajorisCef.View,string>();
         public string profile { owned get { return app.webapp==null?"browser":app.webapp.id; } }
@@ -16,10 +23,11 @@ namespace MajorisBrowser {
         }
         public signal void changed();
         public signal void threat_detected(DownloadRecord record);
-        public DownloadService(Application app,DownloadSecurityProvider? scanner=null){this.app=app;this.scanner=scanner??new NoDownloadScanner();app.storage.run((store)=>{
-            var saved=store.download_records();Idle.add(()=>{foreach(string item in saved)try{var record=DownloadRecord.parse(item);if(record.profile!=(app.webapp==null?"browser":app.webapp.id))continue;if(record.status=="active" || record.status=="paused"){record.status="failed";record.error_detail=_("Browser closed before this download finished.");persist(record);}if(record.assessment==DownloadAssessment.PENDING || record.assessment==DownloadAssessment.NO_KNOWN_THREAT){record.assessment=DownloadAssessment.NOT_ASSESSED;record.assessment_detail="Previous scan is no longer current";persist(record);}records.add(record);}catch(Error e){}changed();return Source.REMOVE;});
+        public DownloadService(Application app,DownloadSecurityProvider? scanner=null){this.app=app;this.scanner=scanner??new NoDownloadScanner();this.scanner.notify["state"].connect(()=>{if(!stopping)changed();});refresh_scanner.begin();app.storage.run((store)=>{
+            var saved=store.download_records();Idle.add(()=>{if(stopping)return Source.REMOVE;foreach(string item in saved)try{var record=DownloadRecord.parse(item);if(record.profile!=(app.webapp==null?"browser":app.webapp.id))continue;if(record.status=="active" || record.status=="paused"){record.status="failed";record.error_detail=_("Browser closed before this download finished.");persist(record);}if(record.assessment==DownloadAssessment.PENDING || record.assessment==DownloadAssessment.NO_KNOWN_THREAT){record.assessment=DownloadAssessment.NOT_ASSESSED;record.assessment_detail="Previous scan is no longer current";persist(record);}records.add(record);}catch(Error e){}changed();return Source.REMOVE;});
         });}
         public void update(MajorisCef.View view,string text,bool ephemeral){
+            if(stopping)return;
             if(!sessions.has_key(view) || (sessions[view]!="")!=ephemeral)return;
             try{
                 var p=new Json.Parser();p.load_from_data(text);var o=p.get_root().get_object();uint id=(uint)o.get_int_member("id");DownloadRecord? record=null;
@@ -34,11 +42,13 @@ namespace MajorisBrowser {
             }catch(Error e){warning("Downloads: %s",e.message);}
         }
         public async void scan(DownloadRecord record,string session){
+            if(stopping)return;
             if(!owns(record,session) || record.status!="complete" || scans.has_key(record) || record.assessment==DownloadAssessment.MALICIOUS || record.assessment==DownloadAssessment.POLICY_BLOCKED)return;
             var cancel=new Cancellable();scans[record]=cancel;record.assessment=DownloadAssessment.PENDING;persist(record);changed();
             FileAssessment result;
-            try{result=yield scanner.assess(record.destination,cancel);}catch(Error e){result=new FileAssessment(DownloadAssessment.SCAN_FAILED,"Scan cancelled or failed");}
+            try{yield refresh_scanner();cancel.set_error_if_cancelled();result=scanner_available?yield scanner.assess(record.destination,cancel):new FileAssessment(DownloadAssessment.UNAVAILABLE,scanner_detail);}catch(Error e){result=new FileAssessment(DownloadAssessment.SCAN_FAILED,"Scan cancelled or failed");}
             scans.unset(record);
+            if(stopping)return;
             if(!owns(record,session) || record.status!="complete" || record.assessment!=DownloadAssessment.PENDING)return;
             record.assessment=result.verdict;record.assessment_detail=result.detail;persist(record);changed();if(result.verdict==DownloadAssessment.MALICIOUS)threat_detected(record);
         }

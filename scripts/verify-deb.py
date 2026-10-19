@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 import pathlib
+import runpy
 import subprocess
 import tarfile
 import tempfile
@@ -58,6 +59,11 @@ with tempfile.TemporaryDirectory(prefix='majoris-deb-runtime-', dir='/tmp') as t
         if metadata.get('schema') != 1 or hashlib.file_digest(
                 (runtime / 'libcef.so').open('rb'), 'sha256').hexdigest() != metadata.get('libcef_sha256'):
             raise SystemExit('Installed custom engine provenance does not match libcef.so')
+        runtime_files=runpy.run_path(str(repo/'engine/scripts/runtime-files.py'))
+        for name,expected in metadata.get('runtime_files',{}).items():
+            target=stage/runtime_files['installed_path'](name)
+            if target.is_symlink() or not target.is_file() or runtime_files['digest'](target)!=expected:
+                raise SystemExit('Installed runtime input differs from inventory: '+name)
         if not (stage / 'usr/share/licenses/majoris-browser/Majoris-engine-LICENSE.txt').is_file():
             raise SystemExit('Installed custom engine licence is missing')
     for executable in (binary, helper, library / 'libmajoris-cef.so'):

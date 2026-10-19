@@ -1,3 +1,45 @@
+> **Current release-hardening record (0.1.0-8):** [release-hardening.md](release-hardening.md). Reviewed source: `27611aa41c806398fb0560aded3853a2a9ba53ec`. The security candidate retains four Majoris patches and adds twelve patches covering thirteen upstream maintenance/security commits. The candidate build, clean 30/30, Debian 30/30 and extracted-runtime verification passed locally. Production, redistribution and native-desktop approval remain pending. Earlier dated completion claims below are historical and do not qualify this candidate.
+
+## Current candidate decoding result
+
+The sixteen-patch candidate passed actual H.264, AAC and combined MP4 decoding
+in browser and installed-app contexts, alongside VP8/VP9/Opus/WebM, in both the
+clean 30/30 and Debian 30/30 suites. Its SDK/library/package hashes and exact
+logs are in [verification results](verification-results.md). Software decoding
+does not establish physical output, hardware acceleration, DRM or redistribution
+rights; those remain distinct qualifications.
+
+## Current redistribution review inputs
+
+The exact generated `CREDITS.html` in the selected SDK is the complete runtime
+third-party notice inventory; `engine/releases-license-inventory.json` records
+its hash alongside CEF/Chromium notices, pinned FFmpeg source and the selected
+configuration flags. Regenerate this inventory for every newly built runtime.
+The Browser is GPL-3.0-or-later, the Majoris engine extensions are BSD-3-Clause,
+and Chromium/CEF contain separately licensed components. Debian's copyright
+file preserves those distinctions and installs the full SDK notices. Debian
+buildinfo records the build environment; system shared-library dependencies
+retain their own Debian copyright/source obligations.
+
+Authorised counsel/release maintainers must inspect the pinned FFmpeg per-file
+licences (BSD-2-Clause, BSD-3-Clause, ISC, LGPL-2.1 and MIT), generated component
+selection, modifications and corresponding source. They must determine notices,
+source availability/offers, permitted linking/relinking and modification duties
+for the actual artifact. `CONFIG_GPL=0` and `CONFIG_NONFREE=0` are technical
+configuration observations, not a blanket licence conclusion. H.264/AAC patents
+require a separate jurisdiction/product/distribution decision; a software licence,
+Brave's shipping configuration or passing playback tests supplies no patent grant.
+See [FFmpeg's legal guidance](https://ffmpeg.org/legal.html).
+
+The inventory and release record deliberately leave redistribution approval
+false. Production/RC channels require an accountable reviewer's explicit
+redistribution reference and bound source/runtime identity. No Widevine binary
+is supplied. Supporting EME does not establish a usable CDM: an authorised vendor
+agreement, matching Linux CDM, supported update mechanism and real service test
+are external prerequisites. See [Widevine documentation](https://developers.google.com/widevine/drm/overview).
+
+## Historical runtime records
+
 # Custom native codec runtime — 19 October 2026
 
 The custom source pipeline now builds CEF branch 7977 on the complete Chromium

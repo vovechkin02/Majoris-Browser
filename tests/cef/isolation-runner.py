@@ -31,3 +31,12 @@ with tempfile.TemporaryDirectory(prefix='majoris-contexts-') as root:
     private.mkdir()
     subprocess.run([binary, helper, resources, str(private), 'private'], check=True, timeout=45)
     assert not (private / 'browser').exists()
+    marker=base/'majoris-engine-version';saved=marker.read_bytes()
+    marker.write_text('999.0.0.0\n')
+    assert subprocess.run([binary,helper,resources,root,'restore']).returncode!=0
+    assert (base/'browser').is_dir() and marker.read_text()=='999.0.0.0\n'
+    marker.write_bytes(saved)
+    marker.unlink();marker.symlink_to(sentinel)
+    assert subprocess.run([binary,helper,resources,root,'restore']).returncode!=0
+    assert sentinel.read_text()=='must survive'
+    marker.unlink();marker.write_bytes(saved)

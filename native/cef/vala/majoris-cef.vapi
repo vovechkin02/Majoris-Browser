@@ -1,5 +1,7 @@
 [CCode (cheader_filename = "majoris-cef.h")]
 namespace MajorisCef {
+    [CCode(cname="mc_runtime_set_display_backend")]
+    public bool set_display_backend(string backend);
     [CCode (cname = "mc_runtime_initialize")]
     public bool initialize (string root, string helper, string resources) throws GLib.Error;
     [CCode (cname = "mc_runtime_shutdown")]
@@ -20,6 +22,8 @@ namespace MajorisCef {
     public bool clear_locked_profile(string path) throws GLib.Error;
     [CCode (cname = "McView", cprefix = "mc_view_", lower_case_cprefix = "mc_view_", type_id = "mc_view_get_type ()")]
     public class View : GLib.Object {
+        [CCode(cname="mc_view_set_screen")]
+        public void set_screen(int x,int y,int width,int height);
         [CCode (cname = "mc_view_new")]
         public View (string profile, bool ephemeral, string url, string scope = "");
         [CCode(cname="mc_view_new_with_permissions")]

@@ -9,7 +9,7 @@ int main(string[] args){
                     var parser=new Json.Parser();parser.load_from_data(value);var data=parser.get_root().get_object();
                     if(step==0){assert(data.get_string_member("link").has_suffix("/link-target") && !data.get_boolean_member("editable"));step=1;Idle.add(()=>{context();return Source.REMOVE;});}
                     else if(step==1){assert(data.get_int_member("media")==1 && data.get_string_member("source").has_prefix("data:image/png"));view.command("copy-context-image");}
-                    else if(step==2 || step==3){assert(data.get_boolean_member("editable"));assert((data.get_int_member("editFlags")&64)!=0);view.command("select-all");view.command("cut");view.evaluate(step==2?"document.querySelector('#edit').value":"document.querySelector('#frame').contentDocument.querySelector('#inner').value");}
+                    else if(step==2 || step==3){assert(data.get_boolean_member("editable"));assert((data.get_int_member("editFlags")&64)!=0);view.command("select-all");view.command("cut");string input=step==2?"document.querySelector('#edit')":"document.querySelector('#frame').contentDocument.querySelector('#inner')";view.evaluate("new Promise(resolve=>{const input="+input+",deadline=performance.now()+2000;const check=()=>{if(input.value==='' || performance.now()>=deadline)resolve(input.value);else setTimeout(check,20);};check();})");}
                     else if(step==4){assert(data.get_string_member("link")=="" && data.get_int_member("media")==0 && !data.get_boolean_member("editable"));step=5;view.command("view-source");}
                 }
                 if(kind=="image:copy-image" && step==1){uint8[] png=Base64.decode(value);assert(png.length>8 && png[0]==137 && png[1]==80);step=2;context();}

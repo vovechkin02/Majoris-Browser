@@ -1,0 +1,170 @@
+{
+  "schema": 1,
+  "runtime_sha256": "d098dd129d1cbfe0b1fb0f7e4b86cfb6b52ccccf8965557591beb9c188174388",
+  "chromium_commit": "92a6f15143569cf59b340472d0b5030465d95722",
+  "v8_commit": "e51a6bf02e52f3dec9fee502db2594c0f5f51b37",
+  "maintenance_backports": [
+    {
+      "commit": "4c1a22f32421179686b28df92a671358d948c59a",
+      "time": "Thu Oct 15 01:22:40 2026",
+      "subject": "[M152] Guard against reentrant destruction during tab drag window operations",
+      "upstream": "https://chromium.googlesource.com/chromium/src/+/4c1a22f32421179686b28df92a671358d948c59a%5E%21/?format=TEXT",
+      "licensing": "Chromium upstream BSD-style notices retained; see Chromium LICENSE and generated CREDITS"
+    },
+    {
+      "commit": "e7c08dce2f5d4e114dce516931a762b300ef98c7",
+      "time": "Thu Oct 15 08:32:50 2026",
+      "subject": "[M152] Plumb CacheStorageSideDataWriter capability remote for code cache",
+      "upstream": "https://chromium.googlesource.com/chromium/src/+/e7c08dce2f5d4e114dce516931a762b300ef98c7%5E%21/?format=TEXT",
+      "licensing": "Chromium upstream BSD-style notices retained; see Chromium LICENSE and generated CREDITS"
+    },
+    {
+      "commit": "941d83b5c7993fd4635e791e9b73be77f5afef7a",
+      "time": "Thu Oct 15 15:34:45 2026",
+      "subject": "[M152] gpu: Restore GL context/surface after WrappedSkImageBacking MakeCurrent",
+      "upstream": "https://chromium.googlesource.com/chromium/src/+/941d83b5c7993fd4635e791e9b73be77f5afef7a%5E%21/?format=TEXT",
+      "licensing": "Chromium upstream BSD-style notices retained; see Chromium LICENSE and generated CREDITS"
+    },
+    {
+      "commit": "65d30132e95a216a1da8738e26fdc8db248c5459",
+      "time": "Thu Oct 15 16:30:48 2026",
+      "subject": "[M152] [canvas2d] Obtain PaintCanvas and state after style resolution in DrawTextInternal",
+      "upstream": "https://chromium.googlesource.com/chromium/src/+/65d30132e95a216a1da8738e26fdc8db248c5459%5E%21/?format=TEXT",
+      "licensing": "Chromium upstream BSD-style notices retained; see Chromium LICENSE and generated CREDITS"
+    },
+    {
+      "commit": "cf67ca600794a6064bd6141cc486bf114b7ed1a7",
+      "time": "Fri Oct 16 05:54:01 2026",
+      "subject": "[M152] [FSA] Validate paths in DeserializeHandle",
+      "upstream": "https://chromium.googlesource.com/chromium/src/+/cf67ca600794a6064bd6141cc486bf114b7ed1a7%5E%21/?format=TEXT",
+      "licensing": "Chromium upstream BSD-style notices retained; see Chromium LICENSE and generated CREDITS"
+    },
+    {
+      "commit": "df33b44103b2d5c0c284729f4ff9928dd89749ef",
+      "time": "Fri Oct 16 15:56:40 2026",
+      "subject": "[M152] [Extensions] Fix UAF in AppWindow::Init() and ForcedFullscreen()",
+      "upstream": "https://chromium.googlesource.com/chromium/src/+/df33b44103b2d5c0c284729f4ff9928dd89749ef%5E%21/?format=TEXT",
+      "licensing": "Chromium upstream BSD-style notices retained; see Chromium LICENSE and generated CREDITS"
+    },
+    {
+      "commit": "216ce10d728819de5e749383e64f8ad05be8fb61",
+      "time": "Fri Oct 16 20:33:26 2026",
+      "subject": "[M152] [Reading mode] Expand setHTML options for distilled content.",
+      "upstream": "https://chromium.googlesource.com/chromium/src/+/216ce10d728819de5e749383e64f8ad05be8fb61%5E%21/?format=TEXT",
+      "licensing": "Chromium upstream BSD-style notices retained; see Chromium LICENSE and generated CREDITS"
+    },
+    {
+      "commit": "fbb64b8bbf07c2ee8c8789eb7d6615f07c8f4ab3",
+      "repository": "chromium",
+      "subject": "CVE-2026-110914: worker CSP sandbox/service-worker handle; combined dependency and include/test-tail context adapted for M152",
+      "upstream": "https://chromium.googlesource.com/chromium/src/+/fbb64b8bbf07c2ee8c8789eb7d6615f07c8f4ab3",
+      "licensing": "Upstream BSD-style notices retained; see generated notices and pinned source LICENSE"
+    },
+    {
+      "commit": "e98f6e2e4f235d665ec8ed43ed93901efe025c3c",
+      "repository": "chromium",
+      "subject": "CVE-2026-110914: worker CSP sandbox/service-worker handle; combined dependency and include/test-tail context adapted for M152",
+      "upstream": "https://chromium.googlesource.com/chromium/src/+/e98f6e2e4f235d665ec8ed43ed93901efe025c3c",
+      "licensing": "Upstream BSD-style notices retained; see generated notices and pinned source LICENSE"
+    },
+    {
+      "commit": "66e6798303a44ae27df0b6572fcb3f295219598a",
+      "repository": "chromium",
+      "subject": "CVE-2026-110917: relookup SVG resource iterator after reentrancy; exact upstream patch",
+      "upstream": "https://chromium.googlesource.com/chromium/src/+/66e6798303a44ae27df0b6572fcb3f295219598a",
+      "licensing": "Upstream BSD-style notices retained; see generated notices and pinned source LICENSE"
+    },
+    {
+      "commit": "4d2451fed3a8cad5cdd1e8488b894ff299c460c9",
+      "repository": "chromium",
+      "subject": "CVE-2026-110915: 64-bit shader identifiers; add missing M152 uint64 writer overload using upstream split serialization",
+      "upstream": "https://chromium.googlesource.com/chromium/src/+/4d2451fed3a8cad5cdd1e8488b894ff299c460c9",
+      "licensing": "Upstream BSD-style notices retained; see generated notices and pinned source LICENSE"
+    },
+    {
+      "commit": "f308dfd569db008afc34159b02ae003c95bca12d",
+      "repository": "v8",
+      "subject": "CVE-2026-110920: generator creation writes/deoptimizes; exact upstream V8 patch",
+      "upstream": "https://chromium.googlesource.com/v8/v8/+/f308dfd569db008afc34159b02ae003c95bca12d",
+      "licensing": "Upstream BSD-style notices retained; see generated notices and pinned source LICENSE"
+    },
+    {
+      "commit": "6911bb69b1cf8cf0a3c3dd6fa27c231a326af72d",
+      "repository": "chromium",
+      "subject": "CVE-2026-110916: reject invalid/non-HTTP Google Calendar NTP event and attachment URLs; exact upstream patch, included conservatively",
+      "upstream": "https://chromium-review.googlesource.com/c/chromium/src/+/8446599",
+      "licensing": "Chromium upstream BSD-style notices retained; see Chromium LICENSE and generated CREDITS"
+    }
+  ],
+  "ffmpeg_commit": "2b68d2babae73714846961fb0ee47e3b3d2e39a9",
+  "complete_generated_third_party_inventory": {
+    "path": "/home/administrator/majoris-engine-m152-codecs/sdk/distribution/cef_binary_152.0.14+g8a0b5b9+chromium-152.0.7977.169_linux64_minimal/CREDITS.html",
+    "sha256": "4e06120446a9fbb9b906a70d3b52136fc548ecc7b32137c5acae997e1ac9efbf"
+  },
+  "notices_and_source_metadata": [
+    {
+      "path": "/mnt/c/Users/Admin/Documents/GitHub/Majoris-Browser/LICENSE",
+      "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
+    },
+    {
+      "path": "/mnt/c/Users/Admin/Documents/GitHub/Majoris-Browser/engine/LICENSE",
+      "sha256": "f8216116e06470a26d1e5fef75cc68c21c59ebfc2b971d9f93379cc7284643bd"
+    },
+    {
+      "path": "/mnt/c/Users/Admin/Documents/GitHub/Majoris-Browser/packaging/debian/copyright",
+      "sha256": "b7f1c94a2813c3367496ac4c1f76c3b130254bad8951f2efad6b1890e940ef28"
+    },
+    {
+      "path": "/home/administrator/majoris-engine-m152-codecs/sdk/distribution/cef_binary_152.0.14+g8a0b5b9+chromium-152.0.7977.169_linux64_minimal/LICENSE.txt",
+      "sha256": "058c3827ffb827ff3edda471ae7e1bb1d1aa5931985f0126043ccd33409e792f"
+    },
+    {
+      "path": "/home/administrator/majoris-engine-m152-codecs/sdk/distribution/cef_binary_152.0.14+g8a0b5b9+chromium-152.0.7977.169_linux64_minimal/CREDITS.html",
+      "sha256": "4e06120446a9fbb9b906a70d3b52136fc548ecc7b32137c5acae997e1ac9efbf"
+    },
+    {
+      "path": "/home/administrator/majoris-engine-m152-codecs/chromium/src/LICENSE",
+      "sha256": "368cca1106be99d39ecd32a38d8305585d802a475effb66380b91ffc9bcf709b"
+    },
+    {
+      "path": "/home/administrator/majoris-engine-m152-codecs/chromium/src/third_party/ffmpeg/README.chromium",
+      "sha256": "17df0ad137aa566137074686d5930abfe48cc2707ac4ccca0251f71db2f7c8be"
+    },
+    {
+      "path": "/home/administrator/majoris-engine-m152-codecs/chromium/src/third_party/ffmpeg/CREDITS.chromium",
+      "sha256": "903a6faa336b60d419bc6eb2bcffe4ca8bd9446735e5de4fcc901c80e9f22327"
+    },
+    {
+      "path": "/home/administrator/majoris-engine-m152-codecs/chromium/src/third_party/ffmpeg/chromium/config/Chrome/linux/x64/config.h",
+      "sha256": "466264a296138d828c1d10f1034e7656e7aacb1063081877f68239b218350dc9"
+    },
+    {
+      "path": "/home/administrator/majoris-engine-m152-codecs/chromium/src/third_party/ffmpeg/chromium/config/Chrome/linux/x64/config_components.h",
+      "sha256": "3e98f36919abed04df89d7b7e6f83217f0bb05d191f890b9a2c935fbc6884d51"
+    }
+  ],
+  "configuration": "is_official_build=true is_component_build=false symbol_level=1 use_thin_lto=true chrome_pgo_phase=0 use_remoteexec=false use_sysroot=true proprietary_codecs=true ffmpeg_branding=\"Chrome\"",
+  "ffmpeg_branding": "Chrome",
+  "selected_configuration_flags": {
+    "CONFIG_LIBX264": "0",
+    "CONFIG_GPL": "0",
+    "CONFIG_NONFREE": "0",
+    "CONFIG_H264_DECODER": "1",
+    "CONFIG_AAC_DECODER": "1"
+  },
+  "redistribution_approved": false,
+  "project_licences": {
+    "browser": "GPL-3.0-or-later",
+    "majoris_engine_extensions": "BSD-3-Clause",
+    "runtime": "CEF/Chromium and separately licensed components; see complete generated notices",
+    "system_dependencies": "See Debian package Depends and buildinfo; each linked system package retains its own copyright/source obligations"
+  },
+  "review_required": [
+    "CEF/Chromium BSD-style notices and full generated third-party notices",
+    "FFmpeg per-file BSD-2-Clause/BSD-3-Clause/ISC/LGPL-2.1/MIT obligations from pinned CREDITS.chromium",
+    "LGPL source/modifications/relinking and distribution obligations for the exact Chromium FFmpeg configuration",
+    "H.264 and AAC patent/licensing applicability by jurisdiction, distribution model and device/product; software notices do not grant patent rights",
+    "Operator legal authorisation, attribution and required source offers before codec redistribution",
+    "Widevine excluded: no authorised CDM binary or redistribution grant supplied"
+  ]
+}

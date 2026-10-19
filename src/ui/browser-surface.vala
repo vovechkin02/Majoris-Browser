@@ -4,6 +4,8 @@ namespace MajorisBrowser {
         public string url = "about:blank";
         public string page_title = "New Tab";
         public bool has_frame;
+        protected double scroll_remainder_x;
+        protected double scroll_remainder_y;
         public bool loading;
         public bool can_go_back;
         public bool can_go_forward;
@@ -41,6 +43,9 @@ namespace MajorisBrowser {
         private WebAccessibleHost accessibility;
         private ulong frame_handler;
         private ulong event_handler;
+        private Gdk.Surface? monitor_surface;
+        private ulong enter_monitor_handler;
+        private ulong leave_monitor_handler;
         private double pointer_x;
         private double pointer_y;
         private Gtk.Box error_box=new Gtk.Box(Gtk.Orientation.VERTICAL,12);
@@ -49,6 +54,7 @@ namespace MajorisBrowser {
             this.with_engine(new MajorisCef.View.with_session(profile,ephemeral,target,scope,permissions,threat_checks,ephemeral?"":history));
         }
         public OffscreenBrowserSurface.with_engine(MajorisCef.View supplied) {
+            realize.connect(sync_monitor);unrealize.connect(disconnect_monitor);
             WebDrag.attach(this);
             hexpand = true; vexpand = true; focusable = true;
             error_box.set_parent(this);error_box.halign=Gtk.Align.CENTER;error_box.valign=Gtk.Align.CENTER;error_box.visible=false;error_message.wrap=true;error_box.append(error_message);
@@ -90,7 +96,7 @@ namespace MajorisBrowser {
                 if(kind=="forward")can_go_forward=value=="1";
                 if (kind == "tooltip") tooltip_text = value;
                 if (kind == "cursor") set_cursor_from_name (value);
-                if (kind == "ready") engine.resize (get_width (),get_height (),get_scale_factor ());
+                if (kind == "ready"){sync_monitor();var native=get_native();double scale=get_scale_factor();if(native!=null && native.get_surface()!=null)scale=native.get_surface().get_scale();engine.resize(get_width(),get_height(),scale);}
                 changed (kind,value);
             });
             im = new Gtk.IMMulticontext (); im.set_client_widget (this);
@@ -111,7 +117,7 @@ namespace MajorisBrowser {
             click.pressed.connect ((n,x,y) => { grab_focus (); engine.pointer (1,(int)x,(int)y,(int)click.get_current_button (),modifiers (click.get_current_event_state ()),0,0); });
             click.released.connect ((n,x,y) => engine.pointer (2,(int)x,(int)y,(int)click.get_current_button (),modifiers (click.get_current_event_state ()),0,0)); add_controller (click);
             var scroll = new Gtk.EventControllerScroll (Gtk.EventControllerScrollFlags.BOTH_AXES);
-            scroll.scroll.connect ((dx,dy) => { engine.pointer (3,(int)pointer_x,(int)pointer_y,0,modifiers (scroll.get_current_event_state ()),(int)(-dx*80),(int)(-dy*80)); return true; }); add_controller (scroll);
+            scroll.scroll.connect ((dx,dy) => {double unit=scroll.get_unit()==Gdk.ScrollUnit.WHEEL?120.0:1.0;scroll_remainder_x-=dx*unit;scroll_remainder_y-=dy*unit;int x=(int)scroll_remainder_x,y=(int)scroll_remainder_y;scroll_remainder_x-=x;scroll_remainder_y-=y;if(x!=0 || y!=0)engine.pointer(3,(int)pointer_x,(int)pointer_y,0,modifiers(scroll.get_current_event_state()),x,y);return true;});add_controller(scroll);
             var keys = new Gtk.EventControllerKey (); keys.set_im_context (im);
             keys.key_pressed.connect ((key,code,state) => {
                 var window=get_root() as Gtk.Window;
@@ -145,10 +151,17 @@ namespace MajorisBrowser {
             return result;
         }
         public override void size_allocate (int width,int height,int baseline) {
+            sync_monitor();
             double scale=get_scale_factor();var native=get_native();if(native!=null && native.get_surface()!=null)scale=native.get_surface().get_scale();
             engine.resize (width,height,scale);
             accessibility.allocate(width,height,baseline,null);
             if(error_box.visible)error_box.allocate(width,height,baseline,null);
+        }
+        private void disconnect_monitor(){if(monitor_surface!=null){if(enter_monitor_handler!=0)monitor_surface.disconnect(enter_monitor_handler);if(leave_monitor_handler!=0)monitor_surface.disconnect(leave_monitor_handler);}enter_monitor_handler=0;leave_monitor_handler=0;monitor_surface=null;}
+        private void sync_monitor(){
+            if(closed || engine==null)return;var native=get_native();if(native==null || native.get_surface()==null)return;var surface=native.get_surface();
+            if(surface!=monitor_surface){disconnect_monitor();monitor_surface=surface;enter_monitor_handler=surface.enter_monitor.connect((monitor)=>{sync_monitor();queue_allocate();});leave_monitor_handler=surface.leave_monitor.connect((monitor)=>{sync_monitor();queue_allocate();});}
+            var monitor=get_display().get_monitor_at_surface(surface);if(monitor!=null){var rect=monitor.get_geometry();engine.set_screen(rect.x,rect.y,rect.width,rect.height);}
         }
         public override void snapshot (Gtk.Snapshot snapshot) {
             if(error_box.visible){snapshot_child(error_box,snapshot);return;}

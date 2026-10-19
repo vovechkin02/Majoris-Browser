@@ -1,0 +1,268 @@
+{
+  "schema": 1,
+  "identity": {
+    "git_revision": "27611aa41c806398fb0560aded3853a2a9ba53ec",
+    "application_source_sha256": "591169faaa20d2a2dc887d1128fc805d546c3062ad4895b271a935a21ddf9947",
+    "libcef_sha256": "d098dd129d1cbfe0b1fb0f7e4b86cfb6b52ccccf8965557591beb9c188174388",
+    "provenance_sha256": "5a5696346cb5119d6f93bc8b96061b583eb5d7b587f0fd2e613bf5406dc85b16",
+    "cef_version": "152.0.14+g8a0b5b9+chromium-152.0.7977.169",
+    "engine_source": {
+      "schema": 1,
+      "cef_branch": "7977",
+      "cef_commit": "8a0b5b99fd4aac7e353f847685be05577298970c",
+      "chromium_version": "152.0.7977.169",
+      "chromium_commit": "92a6f15143569cf59b340472d0b5030465d95722",
+      "depot_tools_commit": "d38909eb68d85b91259f4bf20fe5ebcd38461bc2",
+      "automate_sha256": "fe0c880fd2a91ac3ab4c82301f596295cecc1901e503507e36300a5b58578dcd",
+      "brave_reference_commit": "dcbdb34da3fd9339b39428b370ed4cc07a18580a",
+      "brave_chromium_version": "155.0.8059.30",
+      "security_qualified": false,
+      "redistribution_approved": false,
+      "patches": [
+        {
+          "path": "patches/0001-cef-linux-native-pip.patch",
+          "repository": "cef",
+          "sha256": "30f4e93b736d3389cb0806fafdfdf731758a3ed389e9a4e96d8065fb66a0bd5b"
+        },
+        {
+          "path": "patches/0002-chromium-pip-desktop-identity.patch",
+          "repository": "chromium",
+          "sha256": "5928bf260b5cd37b9e0863642fcaa6331f58016619248dafa0f5a9f875b4b9d8"
+        },
+        {
+          "path": "patches/0003-cef-network-task-sampling.patch",
+          "repository": "cef",
+          "sha256": "024d9d36e37e242bf62eb0a751dc9de7704589d25ab237f530ba551072df1867"
+        },
+        {
+          "path": "patches/0004-cef-osr-ax-validation.patch",
+          "repository": "cef",
+          "sha256": "e8851e8bd3f84f1cf94306ebbda6f6ce4af77548b1b4f2407c0627f230427c01"
+        },
+        {
+          "path": "patches/0005-maintenance-4c1a22f32421.patch",
+          "repository": "chromium",
+          "sha256": "ee55106610447324b9a3fc716fc4a4aadfebe65a9142b86eb6cf92bd8b09651b"
+        },
+        {
+          "path": "patches/0006-maintenance-e7c08dce2f5d.patch",
+          "repository": "chromium",
+          "sha256": "4f9b9ba1252ae24f01db248759a2c8f4649ffb11ba3ba49d7440a8a2c162c535"
+        },
+        {
+          "path": "patches/0007-maintenance-941d83b5c799.patch",
+          "repository": "chromium",
+          "sha256": "300ba2f1412f5a9db69311ca429dc4073036f9ab29237ddcb486bdf5517a4712"
+        },
+        {
+          "path": "patches/0008-maintenance-65d30132e95a.patch",
+          "repository": "chromium",
+          "sha256": "930efaa72e85f33bb1c4569bf337ae9332b26f6bb307d77dd73db271075f4053"
+        },
+        {
+          "path": "patches/0009-maintenance-cf67ca600794.patch",
+          "repository": "chromium",
+          "sha256": "04a1dde04517cfa4b836ab6747fd1d4fb65cbdfe4457988827d856d6b510e518"
+        },
+        {
+          "path": "patches/0010-maintenance-df33b44103b2.patch",
+          "repository": "chromium",
+          "sha256": "70e391ba97136e7118e8eac7271b05c3a137fe2cb1c4e1a489338ec86a68d948"
+        },
+        {
+          "path": "patches/0011-maintenance-216ce10d7288.patch",
+          "repository": "chromium",
+          "sha256": "846eb41dd82c612ed69d2fd90c66bead00fc3c1b2349595e757145a14ce0c241"
+        },
+        {
+          "repository": "chromium",
+          "path": "patches/0012-security-worker-csp.patch",
+          "sha256": "50a5ba2070b4ee2c7d1872e4d3f72c4df3f6a99ed3f2234b35775b3bae935308"
+        },
+        {
+          "repository": "chromium",
+          "path": "patches/0013-security-svg-cycle.patch",
+          "sha256": "924f7689568706532e6c2e7c1a53a8a78f578108a5dae3c19fef819120542f0b"
+        },
+        {
+          "repository": "chromium",
+          "path": "patches/0014-security-shader-id.patch",
+          "sha256": "f7898fa9152a579afc644681365dc76465d906ad3ff591cb07e1ff143baf8d56"
+        },
+        {
+          "repository": "v8",
+          "path": "patches/0015-security-v8-generator.patch",
+          "sha256": "d1905aa692e527033a2e56c80ba3ee1cedfc8c7b141fa504948866560a7143a4"
+        },
+        {
+          "repository": "chromium",
+          "path": "patches/0016-security-calendar-urls.patch",
+          "sha256": "737d677eb9db18f772238d06b559d0866da08f0c689da9ac6e9c49e623ef0c0c"
+        }
+      ],
+      "maintenance_backports": [
+        {
+          "commit": "4c1a22f32421179686b28df92a671358d948c59a",
+          "time": "Thu Oct 15 01:22:40 2026",
+          "subject": "[M152] Guard against reentrant destruction during tab drag window operations",
+          "upstream": "https://chromium.googlesource.com/chromium/src/+/4c1a22f32421179686b28df92a671358d948c59a%5E%21/?format=TEXT",
+          "licensing": "Chromium upstream BSD-style notices retained; see Chromium LICENSE and generated CREDITS"
+        },
+        {
+          "commit": "e7c08dce2f5d4e114dce516931a762b300ef98c7",
+          "time": "Thu Oct 15 08:32:50 2026",
+          "subject": "[M152] Plumb CacheStorageSideDataWriter capability remote for code cache",
+          "upstream": "https://chromium.googlesource.com/chromium/src/+/e7c08dce2f5d4e114dce516931a762b300ef98c7%5E%21/?format=TEXT",
+          "licensing": "Chromium upstream BSD-style notices retained; see Chromium LICENSE and generated CREDITS"
+        },
+        {
+          "commit": "941d83b5c7993fd4635e791e9b73be77f5afef7a",
+          "time": "Thu Oct 15 15:34:45 2026",
+          "subject": "[M152] gpu: Restore GL context/surface after WrappedSkImageBacking MakeCurrent",
+          "upstream": "https://chromium.googlesource.com/chromium/src/+/941d83b5c7993fd4635e791e9b73be77f5afef7a%5E%21/?format=TEXT",
+          "licensing": "Chromium upstream BSD-style notices retained; see Chromium LICENSE and generated CREDITS"
+        },
+        {
+          "commit": "65d30132e95a216a1da8738e26fdc8db248c5459",
+          "time": "Thu Oct 15 16:30:48 2026",
+          "subject": "[M152] [canvas2d] Obtain PaintCanvas and state after style resolution in DrawTextInternal",
+          "upstream": "https://chromium.googlesource.com/chromium/src/+/65d30132e95a216a1da8738e26fdc8db248c5459%5E%21/?format=TEXT",
+          "licensing": "Chromium upstream BSD-style notices retained; see Chromium LICENSE and generated CREDITS"
+        },
+        {
+          "commit": "cf67ca600794a6064bd6141cc486bf114b7ed1a7",
+          "time": "Fri Oct 16 05:54:01 2026",
+          "subject": "[M152] [FSA] Validate paths in DeserializeHandle",
+          "upstream": "https://chromium.googlesource.com/chromium/src/+/cf67ca600794a6064bd6141cc486bf114b7ed1a7%5E%21/?format=TEXT",
+          "licensing": "Chromium upstream BSD-style notices retained; see Chromium LICENSE and generated CREDITS"
+        },
+        {
+          "commit": "df33b44103b2d5c0c284729f4ff9928dd89749ef",
+          "time": "Fri Oct 16 15:56:40 2026",
+          "subject": "[M152] [Extensions] Fix UAF in AppWindow::Init() and ForcedFullscreen()",
+          "upstream": "https://chromium.googlesource.com/chromium/src/+/df33b44103b2d5c0c284729f4ff9928dd89749ef%5E%21/?format=TEXT",
+          "licensing": "Chromium upstream BSD-style notices retained; see Chromium LICENSE and generated CREDITS"
+        },
+        {
+          "commit": "216ce10d728819de5e749383e64f8ad05be8fb61",
+          "time": "Fri Oct 16 20:33:26 2026",
+          "subject": "[M152] [Reading mode] Expand setHTML options for distilled content.",
+          "upstream": "https://chromium.googlesource.com/chromium/src/+/216ce10d728819de5e749383e64f8ad05be8fb61%5E%21/?format=TEXT",
+          "licensing": "Chromium upstream BSD-style notices retained; see Chromium LICENSE and generated CREDITS"
+        },
+        {
+          "commit": "fbb64b8bbf07c2ee8c8789eb7d6615f07c8f4ab3",
+          "repository": "chromium",
+          "subject": "CVE-2026-110914: worker CSP sandbox/service-worker handle; combined dependency and include/test-tail context adapted for M152",
+          "upstream": "https://chromium.googlesource.com/chromium/src/+/fbb64b8bbf07c2ee8c8789eb7d6615f07c8f4ab3",
+          "licensing": "Upstream BSD-style notices retained; see generated notices and pinned source LICENSE"
+        },
+        {
+          "commit": "e98f6e2e4f235d665ec8ed43ed93901efe025c3c",
+          "repository": "chromium",
+          "subject": "CVE-2026-110914: worker CSP sandbox/service-worker handle; combined dependency and include/test-tail context adapted for M152",
+          "upstream": "https://chromium.googlesource.com/chromium/src/+/e98f6e2e4f235d665ec8ed43ed93901efe025c3c",
+          "licensing": "Upstream BSD-style notices retained; see generated notices and pinned source LICENSE"
+        },
+        {
+          "commit": "66e6798303a44ae27df0b6572fcb3f295219598a",
+          "repository": "chromium",
+          "subject": "CVE-2026-110917: relookup SVG resource iterator after reentrancy; exact upstream patch",
+          "upstream": "https://chromium.googlesource.com/chromium/src/+/66e6798303a44ae27df0b6572fcb3f295219598a",
+          "licensing": "Upstream BSD-style notices retained; see generated notices and pinned source LICENSE"
+        },
+        {
+          "commit": "4d2451fed3a8cad5cdd1e8488b894ff299c460c9",
+          "repository": "chromium",
+          "subject": "CVE-2026-110915: 64-bit shader identifiers; add missing M152 uint64 writer overload using upstream split serialization",
+          "upstream": "https://chromium.googlesource.com/chromium/src/+/4d2451fed3a8cad5cdd1e8488b894ff299c460c9",
+          "licensing": "Upstream BSD-style notices retained; see generated notices and pinned source LICENSE"
+        },
+        {
+          "commit": "f308dfd569db008afc34159b02ae003c95bca12d",
+          "repository": "v8",
+          "subject": "CVE-2026-110920: generator creation writes/deoptimizes; exact upstream V8 patch",
+          "upstream": "https://chromium.googlesource.com/v8/v8/+/f308dfd569db008afc34159b02ae003c95bca12d",
+          "licensing": "Upstream BSD-style notices retained; see generated notices and pinned source LICENSE"
+        },
+        {
+          "commit": "6911bb69b1cf8cf0a3c3dd6fa27c231a326af72d",
+          "repository": "chromium",
+          "subject": "CVE-2026-110916: reject invalid/non-HTTP Google Calendar NTP event and attachment URLs; exact upstream patch, included conservatively",
+          "upstream": "https://chromium-review.googlesource.com/c/chromium/src/+/8446599",
+          "licensing": "Chromium upstream BSD-style notices retained; see Chromium LICENSE and generated CREDITS"
+        }
+      ],
+      "candidate_only": true,
+      "v8_commit": "e51a6bf02e52f3dec9fee502db2594c0f5f51b37"
+    },
+    "configuration": "is_official_build=true is_component_build=false symbol_level=1 use_thin_lto=true chrome_pgo_phase=0 use_remoteexec=false use_sysroot=true proprietary_codecs=true ffmpeg_branding=\"Chrome\"",
+    "toolchain": {
+      "depot_tools_commit": "d38909eb68d85b91259f4bf20fe5ebcd38461bc2",
+      "clang_version": "clang version 23.0.0git (https://chromium.googlesource.com/a/external/github.com/llvm/llvm-project 53d18800eda3b7407e53366f27ca78e922c6e0db)\nTarget: x86_64-unknown-linux-gnu\nThread model: posix\nInstalledDir: /home/administrator/majoris-engine-m152-codecs/chromium/src/third_party/llvm-build/Release+Asserts/bin",
+      "clang_sha256": "2713d0688071c181970b94749991ca2e00fdd90409036db552532499f49a28f2",
+      "sysroots_manifest_sha256": "586a193b7af31448bd09f8dd843cd0d19c1a9a5311c58a5ddf59805ba2480044",
+      "wrapper_compiler": "c++ (Debian 14.2.0-19) 14.2.0"
+    }
+  },
+  "channel": "development",
+  "created_at": "2026-10-19T09:13:40.188307+00:00",
+  "security": {
+    "approved": false,
+    "reviewer": "",
+    "reviewed_at": "",
+    "assessment": {
+      "path": "/mnt/c/Users/Admin/Documents/GitHub/Majoris-Browser/docs/security-assessment.md",
+      "sha256": "086c39e424cf0b72b7c4108967e1557471dc21d0610b4e68da42ce0b2ad96f4a"
+    }
+  },
+  "runtime": {
+    "approved": false,
+    "reviewer": "",
+    "evidence": [
+      {
+        "path": "/mnt/c/Users/Admin/Documents/GitHub/Majoris-Browser/build-engine-reference/security-candidate-final-audit.json",
+        "sha256": "252bd9120156ef0fec3595fb0cdc5de38c06a8f19b5cf7c076afa52bab27d347"
+      },
+      {
+        "path": "/mnt/c/Users/Admin/Documents/GitHub/Majoris-Browser/build-engine-reference/security-v8-regressions.log",
+        "sha256": "76acbc45be9138d0f99d1900a1495865a43b89f31f181263c0dd1c9e73b8a1b4"
+      },
+      {
+        "path": "/mnt/c/Users/Admin/Documents/GitHub/Majoris-Browser/build-engine-reference/candidate-clean-test-logs/testlog.json",
+        "sha256": "c2bb128585533a4f342a33277e090a6f844915c791986d0370ab786056ce3393"
+      },
+      {
+        "path": "/mnt/c/Users/Admin/Documents/GitHub/Majoris-Browser/build-packages-hardening-8/test-logs/testlog.json",
+        "sha256": "c7cf84f4c8fa0928fac03f22827a3286ab518c12d757d72f7f4fc5c0acdd4094"
+      },
+      {
+        "path": "/mnt/c/Users/Admin/Documents/GitHub/Majoris-Browser/build-engine-reference/hardening-candidate-deb.log",
+        "sha256": "f5a9afec7d2da3a012dc5bf0d45b1c44e0523bd53d9c794b6b2e36339339a746"
+      }
+    ]
+  },
+  "redistribution": {
+    "approved": false,
+    "reviewer": "",
+    "authorisation_reference": ""
+  },
+  "production": {
+    "approved": false,
+    "reviewer": "",
+    "authorisation_reference": ""
+  },
+  "verification_scope": {
+    "local_clean_groups": 30,
+    "local_debian_groups": 30,
+    "v8_upstream_cases": 3,
+    "installed_runtime_inventory_files": 232,
+    "documentation_only_differences_after_clean_snapshot": [
+      "engine/PATCH-MAINTENANCE.md",
+      "engine/README.md"
+    ],
+    "non_markdown_source_comparison_sha256": "3ec88a2276673951a1ced052d1be3a814ae175e70e847f0774629c302f23ab60",
+    "native_majoris_desktop": "Unverified: user confirmed unavailable",
+    "production_approval_granted": false
+  }
+}
